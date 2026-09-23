@@ -1,0 +1,10 @@
+# Installer binary from upstream KoolDots (17 MB, regenerable)
+.config/hypr/scripts/dots-tui-*
+# Runtime state regenerated on every login / wallpaper change
+.config/hypr/wallpaper_effects/
+.config/hypr/rofi/.current_wallpaper*
+.config/hypr/.initial_startup_done
+# Backups / personal
+*.bak
+*.orig
+.config/gtk-3.0/bookmarks
