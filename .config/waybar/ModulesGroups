@@ -40,7 +40,7 @@
 		"transition-left-to-right": true
         },
 	"modules": [
-		"temperature",		
+		"custom/fan",
 		"cpu",
 		"power-profiles-daemon",	
 		"memory",
