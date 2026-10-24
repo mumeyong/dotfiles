@@ -1,7 +1,7 @@
 From 1f4a67948d09f03bc850d042db527595e925cca2 Mon Sep 17 00:00:00 2001
 From: "yongky.setiawanda" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 24 Oct 2026 16:33:18 +0700
-Subject: [PATCH] Rebrand UI as mumeyong
+Subject: [PATCH 1/2] Rebrand UI as mumeyong
 
 Replace user-visible "Ambxst" text (settings title, notch label,
 notifications, keybind labels, mods dialogs, translations) and the logo
@@ -920,6 +920,45 @@ index 60d0143..3cfc069 100644
    "system.terminal.examples": "Примеры: \"$TERMINAL -e $COMMAND\" · \"gnome-terminal -- $COMMAND\" · \"konsole -e $COMMAND\"",
    "system.terminal.open_with": "Открывать с помощью",
    "system.terminal.title": "Терминал",
+-- 
+2.47.3
+
+
+From 186ec642ec3676da1e27f58337fbdd0558d3386a Mon Sep 17 00:00:00 2001
+From: "yongky.setiawanda" <64839630+mumeyong@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 16:46:27 +0700
+Subject: [PATCH 2/2] Bar: smaller pin button (28px)
+
+---
+ modules/bar/BarContent.qml | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/modules/bar/BarContent.qml b/modules/bar/BarContent.qml
+index 554a38f..2e1af9b 100644
+--- a/modules/bar/BarContent.qml
++++ b/modules/bar/BarContent.qml
+@@ -403,8 +403,8 @@ Item {
+ 
+                             sourceComponent: Button {
+                                 id: pinButton
+-                                implicitWidth: 36
+-                                implicitHeight: 36
++                                implicitWidth: 28
++                                implicitHeight: 28
+ 
+                                 background: StyledRect {
+                                     id: pinButtonBg
+@@ -657,8 +657,8 @@ Item {
+                             
+                                     sourceComponent: Button {
+                                         id: pinButtonV
+-                                        implicitWidth: 36
+-                                        implicitHeight: 36
++                                        implicitWidth: 28
++                                        implicitHeight: 28
+                             
+                                         background: StyledRect {
+                                             id: pinButtonVBg
 -- 
 2.47.3
 

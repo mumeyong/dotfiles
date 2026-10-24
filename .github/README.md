@@ -12,7 +12,7 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.config/ambxst/` | mumeyong shell settings: bar, notch, theme, dock, lock screen, keybinds (`binds.json`) |
 | `.cache/ambxst/wallpapers.json` | Which wallpaper and wallpaper folder the shell uses |
 | `Pictures/wallpapers/wallhaven-6olgox.jpg` | The current wallpaper. The color theme is generated from it. |
-| `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14: the name and the logo |
+| `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14: the name, the logo, and a smaller pin button in the bar. It holds one commit per change. |
 | `.github/ambxst/axctl.toml.seed` | Starting compositor config, so the first login already has keybinds and theme |
 | `.config/kitty/`, `.config/ghostty/` | Terminals |
 | `.config/cava/`, `.config/qt5ct/`, `.config/qt6ct/`, `.config/gtk-3.0/`, `.config/gtk-4.0/` | Other theming |
@@ -21,7 +21,7 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.dotfiles-ignore` | Files kept out of the repo on purpose |
 
 ### About the mumeyong shell
-- It is **Ambxst 1.3.14** plus `mumeyong-rebrand.patch`. The patch only changes what's on screen: the name "mumeyong" and my logo. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
+- It is **Ambxst 1.3.14** plus `mumeyong-rebrand.patch`. The patch only changes what's on screen: the name "mumeyong", my logo, and small tweaks like a smaller pin button in the bar. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
 - Source: `~/.local/src/ambxst`, branch `mumeyong`.
 - Programs: `/usr/local/bin/ambxst`, `axctl` and `matugen`. They are downloaded from GitHub releases and the versions are pinned in `install.sh`.
 - Hyprland reads the shell's generated file `~/.local/share/ambxst/hyprland.lua` last. **My own keybinds in `hyprland.lua` always win.** Any key I've already bound is skipped from the shell's list.
@@ -122,7 +122,7 @@ dotfiles add ~/Pictures/wallpapers/<new-wallpaper> ~/.cache/ambxst/wallpapers.js
 cd ~/.local/src/ambxst
 git fetch --tags origin
 git rebase --onto <new-version> 1.3.14 mumeyong     # fix conflicts if any
-git format-patch --binary -1 --stdout > ~/.github/ambxst/mumeyong-rebrand.patch
+git format-patch --binary --stdout <new-version>..mumeyong > ~/.github/ambxst/mumeyong-rebrand.patch
 ```
 Then update the matching `ambxst` binary. Set `AMBXST_VERSION` in `install.sh`, download that release's `ambxst-linux-amd64`, and `sudo install` it to `/usr/local/bin/ambxst`. Finally run `ambxst reload` and commit.
 
