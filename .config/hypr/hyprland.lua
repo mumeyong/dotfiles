@@ -309,10 +309,20 @@ bind("SUPER + CTRL + F9", dsp.exec_raw("movecurrentworkspacetomonitor l"), "work
 bind("SUPER + CTRL + F10", dsp.exec_raw("movecurrentworkspacetomonitor r"), "workspace to right monitor")
 
 -- Media & hardware keys
--- Volume, play/pause/next/prev/stop and screen brightness keys come from
--- Ambxst's generated binds (so its OSD shows). Extras it doesn't cover:
-bind("ALT + XF86AudioRaiseVolume", sh("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 1%+"), "volume up precise", held)
-bind("ALT + XF86AudioLowerVolume", sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%-"), "volume down precise", held)
+-- Play/pause/next/prev/stop and screen brightness keys come from Ambxst's
+-- generated binds. Volume keys are bound here so they play a feedback sound
+-- (Ambxst's OSD still shows, it follows the volume change itself).
+local volume_sfx = "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga"
+
+local function volume(args)
+  return sh("wpctl " .. args .. " && pw-play " .. volume_sfx)
+end
+
+bind("XF86AudioRaiseVolume", volume("set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), "volume up", held)
+bind("XF86AudioLowerVolume", volume("set-volume @DEFAULT_AUDIO_SINK@ 5%-"), "volume down", held)
+bind("ALT + XF86AudioRaiseVolume", volume("set-volume -l 1 @DEFAULT_AUDIO_SINK@ 1%+"), "volume up precise", held)
+bind("ALT + XF86AudioLowerVolume", volume("set-volume @DEFAULT_AUDIO_SINK@ 1%-"), "volume down precise", held)
+bind("XF86AudioMute", volume("set-mute @DEFAULT_AUDIO_SINK@ toggle"), "toggle mute", locked)
 bind("XF86AudioMicMute", sh("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), "toggle mic mute", locked)
 bind("XF86AudioPause", sh("playerctl play-pause"), "play/pause", locked)
 bind("CTRL + ALT + equal", ipc("brightness +5"), "brightness up", held)
