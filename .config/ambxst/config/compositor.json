@@ -4,7 +4,7 @@
   ],
   "borderAngle": 45,
   "inactiveBorderColor": [
-    "surface"
+    "primaryContainer"
   ],
   "inactiveBorderAngle": 45,
   "borderSize": 2,
