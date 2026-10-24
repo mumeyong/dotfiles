@@ -13,20 +13,37 @@
     "listeners": [
       {
         "timeout": 150,
-        "onTimeout": "axctl brightness save && axctl brightness set 0.1",
+        "onTimeout": "axctl brightness save && $HOME/.config/hypr/scripts/idle-when bat axctl brightness set 0.1",
         "onResume": "axctl brightness restore"
       },
       {
         "timeout": 300,
-        "onTimeout": "loginctl lock-session"
+        "onTimeout": "$HOME/.config/hypr/scripts/idle-when bat loginctl lock-session"
       },
       {
         "timeout": 330,
+        "onTimeout": "$HOME/.config/hypr/scripts/idle-when bat ambxst screen off",
+        "onResume": "ambxst screen on"
+      },
+      {
+        "timeout": 600,
+        "onTimeout": "axctl brightness set 0.1"
+      },
+      {
+        "timeout": 900,
+        "onTimeout": "loginctl lock-session"
+      },
+      {
+        "timeout": 930,
         "onTimeout": "ambxst screen off",
         "onResume": "ambxst screen on"
       },
       {
         "timeout": 1800,
+        "onTimeout": "$HOME/.config/hypr/scripts/idle-when bat ambxst suspend"
+      },
+      {
+        "timeout": 3600,
         "onTimeout": "ambxst suspend"
       }
     ]

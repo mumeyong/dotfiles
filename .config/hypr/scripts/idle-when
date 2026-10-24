@@ -1,0 +1,14 @@
+#!/bin/sh
+# Usage: idle-when ac|bat <command...>
+# Runs <command> only when on the given power source (used by Ambxst idle listeners).
+
+online=$(cat /sys/class/power_supply/ADP0/online 2>/dev/null)
+
+case "$1" in
+  ac)  [ "$online" = 1 ] || exit 0 ;;
+  bat) [ "$online" = 1 ] && exit 0 ;;
+  *)   echo "usage: idle-when ac|bat <command...>" >&2; exit 2 ;;
+esac
+
+shift
+exec "$@"
