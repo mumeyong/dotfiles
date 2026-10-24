@@ -1,5 +1,12 @@
 config_version = 15
 
+[bar.default]
+center = [ "active-window", "clock", "media" ]
+end = [ "tray", "notifications", "network", "volume", "battery", "control-center", "session" ]
+margin_edge = 0
+margin_ends = 620
+radius = 17
+
 [lockscreen_widgets]
 enabled = false
 schema_version = 2
@@ -38,6 +45,16 @@ widget_order = [ "lockscreen-login-box@eDP-1" ]
         show_unlock_hint = true
         show_weather = true
 
+[shell]
+font_family = "Victor Mono"
+
+    [shell.panel]
+    clipboard_placement = "attached"
+    launcher_placement = "attached"
+
+[theme]
+source = "wallpaper"
+
 [wallpaper.default]
 path = "/home/mumei/Pictures/wallpapers/wallhaven-6olgox.jpg"
 
@@ -46,3 +63,16 @@ path = "/home/mumei/Pictures/wallpapers/wallhaven-6olgox.jpg"
 
 [wallpaper.monitors.eDP-1]
 path = "/home/mumei/Pictures/wallpapers/wallhaven-6olgox.jpg"
+
+[widget.network]
+show_label = false
+
+[widget.workspaces]
+hide_when_empty = true
+[notification]
+position = "top_center"
+offset_y = 4
+width = 420
+
+[osd]
+offset_y = 4

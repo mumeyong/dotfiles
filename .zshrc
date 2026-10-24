@@ -29,7 +29,7 @@ alias la='ls -a'
 alias lla='ls -la'
 alias lt='ls --tree'
 
-#starship
+# Starship
 eval "$(starship init zsh)"
 
 # Qwen Code PATH block begin
@@ -44,3 +44,4 @@ export TERM=xterm-256color
 
 # Dotfiles (bare repo): use `dotfiles` like `git`, e.g. `dotfiles status`, `dotfiles add -u`, `dotfiles push`
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
+export PATH=~/.local/opt/node22/bin:$PATH
