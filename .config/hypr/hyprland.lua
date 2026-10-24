@@ -34,11 +34,16 @@ hl.env("XDG_SESSION_TYPE", "wayland")
 hl.monitor({ output = "eDP-1", mode = "1920x1200@60", position = "1920x0", scale = "1" })
 hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@74.97", position = "0x0", scale = "1" })
 
-for ws = 1, 10 do
+-- Fixed workspaces: 1..per_monitor on HDMI, the next per_monitor on the
+-- laptop screen. Change per_monitor to resize; keybinds follow.
+local per_monitor = 3
+local max_ws = 2 * per_monitor
+
+for ws = 1, max_ws do
   hl.workspace_rule({
     workspace = tostring(ws),
-    monitor = ws <= 5 and "HDMI-A-1" or "eDP-1",
-    default = (ws == 1 or ws == 6) or nil,
+    monitor = ws <= per_monitor and "HDMI-A-1" or "eDP-1",
+    default = (ws == 1 or ws == per_monitor + 1) or nil,
     persistent = true,
   })
 end
@@ -270,7 +275,7 @@ end
 
 -- Workspaces
 local shifted = { "exclam", "at", "numbersign", "dollar", "percent", "asciicircum", "ampersand", "asterisk", "parenleft", "parenright" }
-for ws = 1, 10 do
+for ws = 1, max_ws do
   local key = tostring(ws % 10)
   bind("SUPER + " .. key, dsp.focus({ workspace = ws }), "workspace " .. ws)
   bind("SUPER + SHIFT + " .. key, win.move({ workspace = ws }), "move to workspace " .. ws)
@@ -319,12 +324,19 @@ bind("XF86Sleep", ipc("suspend"), "suspend", locked)
 -- Ambxst regenerates this file whenever its settings change (theme colors,
 -- gaps, borders, its own keybinds) and it also autostarts ambxst. Loaded
 -- last so its theming applies; any key already bound above is skipped so
--- your binds always win.
+-- your binds always win, and so are its number-key binds for workspaces
+-- beyond max_ws.
+local function beyond_max_ws(keys)
+  local digit = keys:match("([^+%s]+)%s*$")
+  if not (digit and digit:match("^%d$")) then return false end
+  return (digit == "0" and 10 or tonumber(digit)) > max_ws
+end
+
 local ambxst_config = loadfile(os.getenv("HOME") .. "/.local/share/ambxst/hyprland.lua")
 if ambxst_config then
   local real_bind = hl.bind
   hl.bind = function(keys, ...)
-    if user_combos[combo(keys)] then return end
+    if user_combos[combo(keys)] or beyond_max_ws(keys) then return end
     return real_bind(keys, ...)
   end
   local ok, err = pcall(ambxst_config)

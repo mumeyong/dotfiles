@@ -56,8 +56,8 @@ HIDDEN = object()  # marker for binds that only work in the scrolling layout (un
 # Sidebar sections, in display order. "Essentials" repeats the keys worth
 # learning first; every bind also appears in its own section.
 GROUPS = ["Essentials", "Shell & apps", "Windows", "Workspaces", "Screenshots & tools", "Media & hardware"]
-ESSENTIALS = ["SUPER + H", "SUPER + Enter", "SUPER + D", "SUPER + Q", "SUPER + 1…0",
-              "SUPER + SHIFT + 1…0", "SUPER + Left drag", "SUPER + W", "SUPER + SHIFT + C",
+ESSENTIALS = ["SUPER + H", "SUPER + Enter", "SUPER + D", "SUPER + Q", "SUPER + 1…",
+              "SUPER + SHIFT + 1…", "SUPER + Left drag", "SUPER + W", "SUPER + SHIFT + C",
               "CTRL + ALT + L", "CTRL + ALT + P"]
 
 
@@ -146,7 +146,7 @@ def entries():
 
 
 def collapse_digits(rows):
-    """SUPER+1..SUPER+0 'workspace N' style runs become one line."""
+    """SUPER+1..SUPER+6 'workspace N' style runs become one line ("1…6")."""
     groups, out = {}, []
     for mods, key, label in rows:
         if re.fullmatch(r"[0-9]", key):
@@ -157,8 +157,9 @@ def collapse_digits(rows):
                 continue
         out.append((mods, key, label))
     for (mods, template), members in groups.items():
-        if len(members) >= 5:
-            out.append((list(mods), "1…0", template.replace("N", "1–10")))
+        if len(members) >= 3:
+            nums = sorted(10 if k == "0" else int(k) for _, k, _ in members)
+            out.append((list(mods), f"1…{nums[-1] % 10}", template.replace("N", f"{nums[0]}–{nums[-1]}")))
         else:
             out.extend(members)
     return out
@@ -187,12 +188,21 @@ def group_of(mods, key, label):
     return "Shell & apps"
 
 
+def essential_match(name, by_fmt):
+    """Exact match, or for names ending in "…" the collapsed row ("SUPER + 1…" → "SUPER + 1…6")."""
+    if name in by_fmt:
+        return name
+    if name.endswith("…"):
+        return next((f for f in by_fmt if f.startswith(name) and f[len(name):].isdigit()), None)
+    return None
+
+
 def as_json(rows):
     """Rows grouped and ordered for the sidebar: [{group, keys, label}]."""
     order = lambda r: (r[0] != ["SUPER"], len(r[0]), fmt(r[0], r[1]).lower())
     by_fmt = {fmt(m, k): (m, k, label) for m, k, label in rows}
     items = [{"group": "Essentials", "keys": by_fmt[f][0] + [key_name(by_fmt[f][1])], "label": by_fmt[f][2]}
-             for f in ESSENTIALS if f in by_fmt]
+             for f in ESSENTIALS for f in [essential_match(f, by_fmt)] if f]
     for m, k, label in sorted(rows, key=lambda r: (GROUPS.index(group_of(*r)), order(r))):
         items.append({"group": group_of(m, k, label), "keys": m + [key_name(k)], "label": label})
     return json.dumps(items, ensure_ascii=False)
