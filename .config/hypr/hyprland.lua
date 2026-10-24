@@ -1,11 +1,12 @@
--- Hyprland + Noctalia
--- Noctalia (https://noctalia.dev) provides the bar, launcher, notifications,
--- wallpaper, lock screen, idle, OSD, clipboard and night light.
--- Noctalia settings: SUPER+SHIFT+N > settings, or ~/.config/noctalia/
+-- Hyprland + Ambxst
+-- Ambxst (https://axeni.de/ambxst) provides the bar, notch (dynamic island),
+-- launcher, dashboard, notifications, wallpaper, lock screen, OSD and clipboard.
+-- Ambxst settings: SUPER+SHIFT+C, or ~/.config/ambxst/
+-- Previous Noctalia setup: ~/.config/hypr/hyprland.lua.pre-ambxst
 
 local terminal = "kitty"
 local file_manager = "thunar"
-local noctalia = "noctalia msg "
+local ambxst = "ambxst "
 
 ----------------------------------------------------------------------
 -- Environment
@@ -49,7 +50,7 @@ end
 hl.on("hyprland.start", function()
   hl.exec_cmd("dbus-update-activation-environment --systemd --all")
   hl.exec_cmd("hyprctl setcursor Bibata-Modern-Ice 24")
-  hl.exec_cmd("noctalia")
+  -- ambxst itself is started by its generated config (see end of file)
 end)
 
 ----------------------------------------------------------------------
@@ -204,9 +205,24 @@ hl.window_rule({
 local dsp = hl.dsp
 local win = hl.dsp.window
 
+-- Normalized "MODS|KEY" for every combo bound here, so Ambxst's generated
+-- binds can skip keys we already use (see end of file).
+local user_combos = {}
+
+local function combo(keys)
+  local parts = {}
+  for p in keys:gmatch("[^+]+") do
+    parts[#parts + 1] = p:match("^%s*(.-)%s*$"):upper()
+  end
+  local key = table.remove(parts)
+  table.sort(parts)
+  return table.concat(parts, "+") .. "|" .. key
+end
+
 local function bind(keys, action, desc, opts)
   opts = opts or {}
   opts.description = desc
+  user_combos[combo(keys)] = true
   hl.bind(keys, action, opts)
 end
 
@@ -215,7 +231,7 @@ local function sh(cmd)
 end
 
 local function ipc(cmd)
-  return dsp.exec_cmd(noctalia .. cmd)
+  return dsp.exec_cmd(ambxst .. cmd)
 end
 
 local held = { locked = true, repeating = true }
@@ -226,30 +242,27 @@ bind("SUPER + Return", sh(terminal), "terminal")
 bind("SUPER + E", sh(file_manager), "file manager")
 bind("SUPER + B", sh('xdg-open "https://"'), "browser")
 
--- Noctalia
-bind("SUPER + D", ipc("panel-toggle launcher"), "app launcher")
-bind("SUPER + ALT + E", ipc("panel-toggle launcher /emo"), "emoji picker")
-bind("SUPER + SHIFT + N", ipc("panel-toggle control-center"), "control center")
-bind("SUPER + SHIFT + E", ipc("panel-toggle control-center"), "control center")
-bind("SUPER + W", ipc("panel-toggle wallpaper"), "wallpaper picker")
-bind("CTRL + ALT + W", ipc("wallpaper-random"), "random wallpaper")
-bind("SUPER + ALT + V", ipc("panel-toggle clipboard"), "clipboard history")
-bind("CTRL + ALT + P", ipc("panel-toggle session"), "power menu")
-bind("CTRL + ALT + L", ipc("session lock"), "lock screen")
-bind("CTRL + ALT + Delete", ipc("session logout"), "exit Hyprland")
-bind("CTRL + ALT + D", ipc("dock-toggle"), "toggle dock")
-bind("SUPER + CTRL + ALT + B", ipc("bar-toggle"), "toggle bar")
-bind("SUPER + N", ipc("nightlight-force-toggle"), "night light")
-bind("ALT + Tab", ipc("window-switcher hold"), "window switcher")
-bind("SUPER + CTRL + S", ipc("window-switcher"), "window switcher")
+-- Ambxst (same keys as the old Noctalia setup)
+bind("SUPER + D", ipc("run launcher"), "app launcher")
+bind("SUPER + ALT + E", ipc("run emoji"), "emoji picker")
+bind("SUPER + SHIFT + N", ipc("run dashboard"), "dashboard")
+bind("SUPER + SHIFT + E", ipc("run dashboard-controls"), "quick controls")
+bind("SUPER + W", ipc("run wallpapers"), "wallpaper picker")
+bind("SUPER + ALT + V", ipc("run clipboard"), "clipboard history")
+bind("CTRL + ALT + P", ipc("run powermenu"), "power menu")
+bind("CTRL + ALT + L", ipc("lock"), "lock screen")
+bind("CTRL + ALT + Delete", ipc("run powermenu"), "power menu")
+bind("SUPER + CTRL + ALT + B", ipc("toggle bar"), "toggle bar")
+bind("ALT + Tab", ipc("run overview"), "overview")
+bind("SUPER + CTRL + S", ipc("run overview"), "overview")
 
--- Screenshots
-bind("SUPER + Print", ipc("screenshot-fullscreen"), "screenshot")
-bind("SUPER + SHIFT + Print", ipc("screenshot-region"), "screenshot (area)")
-bind("ALT + SHIFT + S", ipc("screenshot-region"), "screenshot (area)")
-bind("SUPER + SHIFT + S", ipc("screenshot-annotate"), "screenshot (annotate)")
-bind("SUPER + F6", ipc("screenshot-fullscreen"), "screenshot")
-bind("SUPER + SHIFT + F6", ipc("screenshot-region"), "screenshot (area)")
+-- Screenshots (Ambxst's screenshot tool lets you pick region/window/screen)
+bind("SUPER + Print", ipc("run screenshot"), "screenshot")
+bind("SUPER + SHIFT + Print", ipc("run screenshot"), "screenshot")
+bind("ALT + SHIFT + S", ipc("run screenshot"), "screenshot")
+bind("SUPER + SHIFT + S", ipc("run screenshot"), "screenshot")
+bind("SUPER + F6", ipc("run screenshot"), "screenshot")
+bind("SUPER + SHIFT + F6", ipc("run screenshot"), "screenshot")
 
 -- Windows
 bind("SUPER + Q", win.close(), "close window")
@@ -296,21 +309,36 @@ bind("SUPER + CTRL + F9", dsp.exec_raw("movecurrentworkspacetomonitor l"), "work
 bind("SUPER + CTRL + F10", dsp.exec_raw("movecurrentworkspacetomonitor r"), "workspace to right monitor")
 
 -- Media & hardware keys
-bind("XF86AudioRaiseVolume", ipc("volume-up"), "volume up", held)
-bind("XF86AudioLowerVolume", ipc("volume-down"), "volume down", held)
-bind("ALT + XF86AudioRaiseVolume", ipc("volume-up 1"), "volume up precise", held)
-bind("ALT + XF86AudioLowerVolume", ipc("volume-down 1"), "volume down precise", held)
-bind("XF86AudioMute", ipc("volume-mute"), "toggle mute", locked)
-bind("XF86AudioMicMute", ipc("mic-mute"), "toggle mic mute", locked)
-bind("XF86AudioPlay", ipc("media toggle"), "play/pause", locked)
-bind("XF86AudioPause", ipc("media toggle"), "play/pause", locked)
-bind("XF86AudioNext", ipc("media next"), "next track", locked)
-bind("XF86AudioPrev", ipc("media previous"), "previous track", locked)
-bind("XF86AudioStop", ipc("media stop"), "stop", locked)
-bind("XF86MonBrightnessUp", ipc("brightness-up"), "brightness up", held)
-bind("XF86MonBrightnessDown", ipc("brightness-down"), "brightness down", held)
-bind("CTRL + ALT + equal", ipc("brightness-up"), "brightness up", held)
-bind("CTRL + ALT + minus", ipc("brightness-down"), "brightness down", held)
-bind("XF86KbdBrightnessUp", ipc("keyboard-backlight-up"), "keyboard backlight up", held)
-bind("XF86KbdBrightnessDown", ipc("keyboard-backlight-down"), "keyboard backlight down", held)
-bind("XF86Sleep", ipc("session suspend"), "suspend", locked)
+-- Volume, play/pause/next/prev/stop and screen brightness keys come from
+-- Ambxst's generated binds (so its OSD shows). Extras it doesn't cover:
+bind("ALT + XF86AudioRaiseVolume", sh("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 1%+"), "volume up precise", held)
+bind("ALT + XF86AudioLowerVolume", sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%-"), "volume down precise", held)
+bind("XF86AudioMicMute", sh("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), "toggle mic mute", locked)
+bind("XF86AudioPause", sh("playerctl play-pause"), "play/pause", locked)
+bind("CTRL + ALT + equal", ipc("brightness +5"), "brightness up", held)
+bind("CTRL + ALT + minus", ipc("brightness -5"), "brightness down", held)
+bind("XF86KbdBrightnessUp", sh("brightnessctl -d '*::kbd_backlight' set +10%"), "keyboard backlight up", held)
+bind("XF86KbdBrightnessDown", sh("brightnessctl -d '*::kbd_backlight' set 10%-"), "keyboard backlight down", held)
+bind("XF86Sleep", ipc("suspend"), "suspend", locked)
+
+----------------------------------------------------------------------
+-- Ambxst
+----------------------------------------------------------------------
+-- Ambxst regenerates this file whenever its settings change (theme colors,
+-- gaps, borders, its own keybinds) and it also autostarts ambxst. Loaded
+-- last so its theming applies; any key already bound above is skipped so
+-- your binds always win.
+local ambxst_config = loadfile(os.getenv("HOME") .. "/.local/share/ambxst/hyprland.lua")
+if ambxst_config then
+  local real_bind = hl.bind
+  hl.bind = function(keys, ...)
+    if user_combos[combo(keys)] then return end
+    return real_bind(keys, ...)
+  end
+  local ok, err = pcall(ambxst_config)
+  hl.bind = real_bind
+  if not ok then print("ambxst config error: " .. tostring(err)) end
+else
+  -- Generated file missing (first run): still start the shell
+  hl.on("hyprland.start", function() hl.exec_cmd("ambxst") end)
+end
