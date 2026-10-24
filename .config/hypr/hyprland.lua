@@ -2,7 +2,6 @@
 -- Ambxst (https://axeni.de/ambxst) provides the bar, notch (dynamic island),
 -- launcher, dashboard, notifications, wallpaper, lock screen, OSD and clipboard.
 -- Ambxst settings: SUPER+SHIFT+C, or ~/.config/ambxst/
--- Previous Noctalia setup: ~/.config/hypr/hyprland.lua.pre-ambxst
 
 local terminal = "kitty"
 local file_manager = "thunar"
@@ -157,21 +156,6 @@ pcall(hl.gesture, { fingers = 3, direction = "horizontal", action = "workspace" 
 ----------------------------------------------------------------------
 -- Layer & window rules
 ----------------------------------------------------------------------
-hl.layer_rule({
-  name = "noctalia",
-  match = { namespace = "^noctalia-(bar-.+|notification|dock|panel|attached-panel|osd|window-switcher)$" },
-  no_anim = true,
-  ignore_alpha = 0.5,
-  blur = true,
-  blur_popups = true,
-})
-
-hl.window_rule({
-  name = "noctalia-settings",
-  match = { class = "dev.noctalia.Noctalia" },
-  float = true,
-  size = { 1080, 920 },
-})
 hl.window_rule({
   name = "idle-inhibit-fullscreen",
   match = { fullscreen = true },
@@ -242,7 +226,7 @@ bind("SUPER + Return", sh(terminal), "terminal")
 bind("SUPER + E", sh(file_manager), "file manager")
 bind("SUPER + B", sh('xdg-open "https://"'), "browser")
 
--- Ambxst (same keys as the old Noctalia setup)
+-- Ambxst
 bind("SUPER + D", ipc("run launcher"), "app launcher")
 bind("SUPER + ALT + E", ipc("run emoji"), "emoji picker")
 bind("SUPER + SHIFT + N", ipc("run dashboard"), "dashboard")

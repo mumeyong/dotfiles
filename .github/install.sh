@@ -28,6 +28,7 @@ MATUGEN_VERSION="4.2.0"
 PHOSPHOR_VERSION="2.1.2"
 NERDFONTS_VERSION="v3.5.1"
 LEAGUE_GOTHIC_VERSION="1.601"
+ADW_GTK3_VERSION="v6.5"   # GTK theme the shell recolors from the wallpaper (Thunar etc.)
 SHELL_SRC="$HOME/.local/src/ambxst"
 # quickshell (and a newer tmux) come from trixie-backports
 SHELL_PACKAGES=(fuzzel tmux zenity wlsunset sqlite3 tesseract-ocr tesseract-ocr-eng
@@ -186,6 +187,13 @@ install_shell() {
   mkdir -p "$tmp/lg" && tar -xJf "$tmp/lg.tar.xz" -C "$tmp/lg"
   find "$tmp/lg" \( -name '*.otf' -o -name '*.ttf' \) ! -iname '*variable*' -exec cp {} "$fonts/league-gothic/" \;
   fc-cache -f "$fonts" >/dev/null
+
+  step "Installing adw-gtk3 GTK theme"
+  mkdir -p "$HOME/.local/share/themes"
+  fetch "https://github.com/lassekongo83/adw-gtk3/releases/download/$ADW_GTK3_VERSION/adw-gtk3$ADW_GTK3_VERSION.tar.xz" "$tmp/adw-gtk3.tar.xz"
+  tar -xJf "$tmp/adw-gtk3.tar.xz" -C "$HOME/.local/share/themes"
+  gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3 2>/dev/null || true
+  gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
 }
 
 if [ "$with_shell" -eq 1 ]; then

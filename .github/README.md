@@ -16,7 +16,6 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.github/ambxst/axctl.toml.seed` | Starting compositor config, so the first login already has keybinds and theme |
 | `.config/kitty/`, `.config/ghostty/` | Terminals |
 | `.config/cava/`, `.config/qt5ct/`, `.config/qt6ct/`, `.config/gtk-3.0/`, `.config/gtk-4.0/` | Other theming |
-| `.local/state/noctalia/settings.toml` | Old Noctalia shell setup, kept as a fallback |
 | `.zshrc` | Shell, including the `dotfiles` alias |
 | `.dotfiles-ignore` | Files kept out of the repo on purpose |
 
@@ -62,7 +61,7 @@ What the script does:
    - enables `trixie-backports` and installs `quickshell` and the other shell packages
    - downloads `ambxst` (checksum-verified), `axctl` and `matugen` into `/usr/local/bin`
    - clones Ambxst 1.3.14 into `~/.local/src/ambxst` and applies the rebrand patch on a `mumeyong` branch
-   - installs the fonts the shell needs: Phosphor icons, Nerd Font symbols, League Gothic
+   - installs the fonts the shell needs (Phosphor icons, Nerd Font symbols, League Gothic) and the adw-gtk3 GTK theme, which the shell recolors to match the wallpaper
 6. Reloads Hyprland if it's running.
 
 Then log out and log back in. The shell starts by itself.
@@ -130,5 +129,4 @@ Then update the matching `ambxst` binary. Set `AMBXST_VERSION` in `install.sh`, 
 - **`dotfiles: command not found`:** open a new terminal or run `source ~/.zshrc`. Without the alias, use `git --git-dir=$HOME/.dotfiles --work-tree=$HOME …`.
 - **No shell keybinds after the first login:** run `ambxst quit && ambxst &`. This restarts its helper `axctl`, which regenerates `~/.local/share/ambxst/hyprland.lua`. Then run `hyprctl reload`.
 - **Shell won't start:** run `ambxst` in a terminal to see the error. The log is in `/run/user/$(id -u)/quickshell/by-id/*/log.qslog`. You can read it with `qs log -p ~/.local/src/ambxst/shell.qml`.
-- **Back to Noctalia:** run `sudo apt install noctalia` (from the [Noctalia apt repo](https://noctalia.dev)). Then in `hyprland.lua`, replace the Ambxst block at the end with `hl.on("hyprland.start", function() hl.exec_cmd("noctalia") end)`. The pre-Ambxst version is in git history: `dotfiles log -- .config/hypr/hyprland.lua`.
 - **Something broke after restore:** your previous files are in `~/.dotfiles-backup-<date>/`.
