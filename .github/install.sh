@@ -192,7 +192,7 @@ install_shell() {
   mkdir -p "$HOME/.local/share/themes"
   fetch "https://github.com/lassekongo83/adw-gtk3/releases/download/$ADW_GTK3_VERSION/adw-gtk3$ADW_GTK3_VERSION.tar.xz" "$tmp/adw-gtk3.tar.xz"
   tar -xJf "$tmp/adw-gtk3.tar.xz" -C "$HOME/.local/share/themes"
-  gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3 2>/dev/null || true
+  gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark 2>/dev/null || true
   gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
 }
 

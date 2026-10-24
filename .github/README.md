@@ -9,10 +9,11 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | Path | What |
 |---|---|
 | `.config/hypr/hyprland.lua` | Hyprland config: monitors, workspaces, input, look, keybinds. Loads the shell's generated config at the end. |
+| `.config/hypr/scripts/keyhints` | Builds the keybind list for the SUPER+H cheatsheet sidebar (also works standalone as a fuzzel popup) |
 | `.config/ambxst/` | mumeyong shell settings: bar, notch, theme, dock, lock screen, keybinds (`binds.json`) |
 | `.cache/ambxst/wallpapers.json` | Which wallpaper and wallpaper folder the shell uses |
 | `Pictures/wallpapers/wallhaven-6olgox.jpg` | The current wallpaper. The color theme is generated from it. |
-| `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14: the name, the logo, and a smaller pin button in the bar. It holds one commit per change. |
+| `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14, one commit per change: the name and logo, a smaller pin button, the SUPER+H keybind cheatsheet sidebar (replaces the AI assistant), and GTK theming fixes (dark variant, readable selections, see-through background) |
 | `.github/ambxst/axctl.toml.seed` | Starting compositor config, so the first login already has keybinds and theme |
 | `.config/kitty/`, `.config/ghostty/` | Terminals |
 | `.config/cava/`, `.config/qt5ct/`, `.config/qt6ct/`, `.config/gtk-3.0/`, `.config/gtk-4.0/` | Other theming |
@@ -20,7 +21,7 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.dotfiles-ignore` | Files kept out of the repo on purpose |
 
 ### About the mumeyong shell
-- It is **Ambxst 1.3.14** plus `mumeyong-rebrand.patch`. The patch only changes what's on screen: the name "mumeyong", my logo, and small tweaks like a smaller pin button in the bar. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
+- It is **Ambxst 1.3.14** plus `mumeyong-rebrand.patch`. The patch changes what's on screen: the name "mumeyong", my logo, a smaller pin button, the keybind cheatsheet in place of the AI assistant sidebar, and how GTK apps like Thunar are themed. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
 - Source: `~/.local/src/ambxst`, branch `mumeyong`.
 - Programs: `/usr/local/bin/ambxst`, `axctl` and `matugen`. They are downloaded from GitHub releases and the versions are pinned in `install.sh`.
 - Hyprland reads the shell's generated file `~/.local/share/ambxst/hyprland.lua` last. **My own keybinds in `hyprland.lua` always win.** Any key I've already bound is skipped from the shell's list.
@@ -94,6 +95,7 @@ dotfiles rm --cached ~/.config/foo -r    # stop tracking (keeps the file)
 
 | Keys | Action |
 |---|---|
+| SUPER+H | Keybind cheatsheet sidebar (press again to close). Replaces the AI assistant sidebar. |
 | SUPER+D | Launcher |
 | SUPER+SHIFT+N | Dashboard |
 | SUPER+SHIFT+E | Quick controls |

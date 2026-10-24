@@ -75,12 +75,11 @@ hl.config({
     dim_inactive = true,
     dim_strength = 0.1,
     dim_special = 0.8,
+    -- Shadow size and color come from the shell's settings (loaded last);
+    -- only the inactive color is set here, since the shell doesn't set it.
     shadow = {
       enabled = true,
-      range = 2,
-      render_power = 1,
-      color = "rgba(8db4ffff)",
-      color_inactive = "rgba(5f6578ff)",
+      color_inactive = "rgba(00000055)",
     },
     blur = {
       enabled = true,
@@ -225,7 +224,6 @@ local locked = { locked = true }
 bind("SUPER + Return", sh(terminal), "terminal")
 bind("SUPER + E", sh(file_manager), "file manager")
 bind("SUPER + B", sh('xdg-open "https://"'), "browser")
-
 -- Ambxst
 bind("SUPER + D", ipc("run launcher"), "app launcher")
 bind("SUPER + ALT + E", ipc("run emoji"), "emoji picker")
