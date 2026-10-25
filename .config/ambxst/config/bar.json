@@ -6,7 +6,7 @@
   "launcherIconSize": 18,
   "pillStyle": "default",
   "screenList": [],
-  "enableFirefoxPlayer": false,
+  "enableFirefoxPlayer": true,
   "barColor": [
     [
       "surface",
