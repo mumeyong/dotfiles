@@ -54,6 +54,8 @@ end
 hl.on("hyprland.start", function()
   hl.exec_cmd("dbus-update-activation-environment --systemd --all")
   hl.exec_cmd("hyprctl setcursor Bibata-Modern-Ice 24")
+  -- Opens in the special:music scratchpad (window rule below), SUPER+M shows it
+  hl.exec_cmd("youtube-music")
   -- ambxst itself is started by its generated config (see end of file)
 end)
 
@@ -180,6 +182,13 @@ hl.window_rule({
   float = true,
   center = true,
 })
+-- YouTube Music (Pear Desktop) can't hide itself on Wayland, so it lives in a
+-- scratchpad instead; the notch controls playback while it's out of sight
+hl.window_rule({
+  name = "youtube-music-scratchpad",
+  match = { class = "^com\\.github\\.th-ch\\.youtube-music$" },
+  workspace = "special:music silent",
+})
 hl.window_rule({
   name = "float-utilities",
   match = { class = "^(pavucontrol|org.pulseaudio.pavucontrol|nm-connection-editor|blueman-manager|qalculate-gtk|mpv|yad)$" },
@@ -229,6 +238,7 @@ local locked = { locked = true }
 bind("SUPER + Return", sh(terminal), "terminal")
 bind("SUPER + E", sh(file_manager), "file manager")
 bind("SUPER + B", sh('xdg-open "https://"'), "browser")
+bind("SUPER + M", dsp.workspace.toggle_special("music"), "show/hide YouTube Music")
 -- Ambxst
 bind("SUPER + D", ipc("run launcher"), "app launcher")
 bind("SUPER + ALT + E", ipc("run emoji"), "emoji picker")
