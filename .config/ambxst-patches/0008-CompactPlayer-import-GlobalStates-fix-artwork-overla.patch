@@ -1,0 +1,47 @@
+From 63c7d0997044ee73ac218b5599660c9e8068936d Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 00:29:07 +0700
+Subject: [PATCH 8/8] CompactPlayer: import GlobalStates, fix artwork overlay
+ radius
+
+wallpaperPath referenced GlobalStates without importing qs.modules.globals,
+so it threw a ReferenceError and the player never got the wallpaper frame
+as fallback artwork. The overlay inside the ClippingRectangle read
+parent.radius, which is undefined there (children are reparented to its
+content item); point it at the ClippingRectangle instead.
+---
+ modules/widgets/defaultview/CompactPlayer.qml | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/modules/widgets/defaultview/CompactPlayer.qml b/modules/widgets/defaultview/CompactPlayer.qml
+index 69c4b59..cc1daaa 100644
+--- a/modules/widgets/defaultview/CompactPlayer.qml
++++ b/modules/widgets/defaultview/CompactPlayer.qml
+@@ -7,6 +7,7 @@ import Quickshell.Wayland
+ import Quickshell.Widgets
+ import Quickshell.Services.Mpris
+ import qs.modules.theme
++import qs.modules.globals
+ import qs.modules.bar.workspaces
+ import qs.modules.services
+ import qs.modules.components
+@@ -331,6 +332,7 @@ Item {
+                 Layout.preferredHeight: 24
+                 visible: compactPlayer.notchHovered
+                 ClippingRectangle {
++                    id: artworkClip
+                     anchors.fill: parent
+                     radius: compactPlayer.isPlaying ? Styling.radius(-8) : Styling.radius(-4)
+                     color: "transparent"
+@@ -365,7 +367,7 @@ Item {
+                         anchors.fill: parent
+                         variant: "internalbg"
+                         opacity: ((hasArtwork || wallpaperPath !== "") && compactPlayer.notchHovered) ? 0.5 : 0.0
+-                        radius: parent.radius
++                        radius: artworkClip.radius
+                         Behavior on opacity {
+                             enabled: Config.animDuration > 0
+                             NumberAnimation {
+-- 
+2.47.3
+

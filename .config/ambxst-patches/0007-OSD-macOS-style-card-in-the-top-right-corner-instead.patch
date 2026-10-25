@@ -1,0 +1,381 @@
+From 217b551c235911b58b222cd0b8091b552d7bac8e Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 00:28:19 +0700
+Subject: [PATCH 7/8] OSD: macOS-style card in the top-right corner instead of
+ the notch
+
+Move the volume, mic and brightness indicator out of the dynamic island
+into its own layer window: a card below the bar with a title, the level,
+and a thick pill slider with the icon inside. It slides in from the
+right, ignores input, and only shows on the focused monitor.
+OsdService still owns the state; the notch's compact player is back to
+how it was before the notch OSD.
+---
+ modules/services/OsdService.qml             |   2 +-
+ modules/shell/osd/OSD.qml                   | 164 ++++++++++++++++++++
+ modules/widgets/defaultview/DefaultView.qml |  32 +---
+ modules/widgets/defaultview/NotchOsd.qml    |  77 ---------
+ shell.qml                                   |  15 ++
+ 5 files changed, 182 insertions(+), 108 deletions(-)
+ create mode 100644 modules/shell/osd/OSD.qml
+ delete mode 100644 modules/widgets/defaultview/NotchOsd.qml
+
+diff --git a/modules/services/OsdService.qml b/modules/services/OsdService.qml
+index f1a2847..2fa0293 100644
+--- a/modules/services/OsdService.qml
++++ b/modules/services/OsdService.qml
+@@ -3,7 +3,7 @@ pragma Singleton
+ import QtQuick
+ import Quickshell
+ 
+-// Volume / mic / brightness OSD state, rendered inside the notch (NotchOsd).
++// Volume / mic / brightness OSD state, rendered by modules/shell/osd/OSD.qml.
+ Singleton {
+     id: root
+ 
+diff --git a/modules/shell/osd/OSD.qml b/modules/shell/osd/OSD.qml
+new file mode 100644
+index 0000000..85a5aba
+--- /dev/null
++++ b/modules/shell/osd/OSD.qml
+@@ -0,0 +1,164 @@
++pragma ComponentBehavior: Bound
++import QtQuick
++import QtQuick.Layouts
++import Quickshell
++import Quickshell.Wayland
++import qs.modules.components
++import qs.modules.theme
++import qs.modules.services
++import qs.config
++
++// macOS-style volume / mic / brightness OSD: a card in the top-right corner,
++// below the bar, on the focused monitor. State comes from OsdService.
++PanelWindow {
++    id: root
++
++    property ShellScreen targetScreen
++    screen: targetScreen
++
++    readonly property bool isScreenFocused: AxctlService.focusedMonitor && AxctlService.focusedMonitor.name === targetScreen.name
++    readonly property bool shown: OsdService.visible && isScreenFocused
++    readonly property bool isBrightness: OsdService.indicator === "brightness"
++    readonly property real level: Math.max(0, Math.min(1, OsdService.value))
++
++    WlrLayershell.layer: WlrLayer.Overlay
++    WlrLayershell.namespace: "ambxst:osd"
++    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
++    // Respect the bar's reserved zone so the card sits right below it
++    exclusiveZone: 0
++
++    anchors.top: true
++    anchors.right: true
++
++    implicitWidth: card.width + 16
++    implicitHeight: card.height + 16
++    color: "transparent"
++    visible: shown || card.opacity > 0
++
++    // Never take input; clicks pass through to whatever is below
++    mask: Region {}
++
++    StyledRect {
++        id: card
++        variant: "popup"
++        width: 300
++        height: 76
++        y: 8
++        x: root.shown ? 8 : 8 + 24
++        opacity: root.shown ? 1 : 0
++        radius: Styling.radius(4)
++
++        Behavior on x {
++            enabled: Config.animDuration > 0
++            NumberAnimation {
++                duration: Config.animDuration
++                easing.type: Easing.OutQuart
++            }
++        }
++
++        Behavior on opacity {
++            enabled: Config.animDuration > 0
++            NumberAnimation {
++                duration: Config.animDuration
++                easing.type: Easing.OutQuart
++            }
++        }
++
++        ColumnLayout {
++            anchors.fill: parent
++            anchors.margins: 14
++            spacing: 8
++
++            RowLayout {
++                Layout.fillWidth: true
++                spacing: 0
++
++                Text {
++                    text: {
++                        if (OsdService.indicator === "volume")
++                            return I18n.t("osd.volume");
++                        if (OsdService.indicator === "mic")
++                            return I18n.t("osd.mic");
++                        return I18n.t("osd.brightness");
++                    }
++                    font.family: Config.theme.font
++                    font.pixelSize: Styling.fontSize(0)
++                    font.bold: true
++                    color: Colors.overBackground
++                }
++
++                Item {
++                    Layout.fillWidth: true
++                }
++
++                Text {
++                    text: OsdService.muted ? "Muted" : Math.round(OsdService.value * 100) + "%"
++                    font.family: Config.theme.font
++                    font.pixelSize: Styling.fontSize(-1)
++                    color: Colors.outline
++                }
++            }
++
++            // Thick pill slider with the icon inside, like the macOS control center
++            Rectangle {
++                id: track
++                Layout.fillWidth: true
++                Layout.preferredHeight: 24
++                radius: Config.roundness > 0 ? height / 2 : 0
++                color: Qt.rgba(Colors.overBackground.r, Colors.overBackground.g, Colors.overBackground.b, 0.15)
++                clip: true
++
++                Rectangle {
++                    id: fill
++                    anchors.left: parent.left
++                    anchors.top: parent.top
++                    anchors.bottom: parent.bottom
++                    width: Math.max(track.height, track.width * root.level)
++                    radius: track.radius
++                    color: OsdService.muted ? Colors.outline : Colors.primary
++
++                    Behavior on width {
++                        enabled: Config.animDuration > 0
++                        NumberAnimation {
++                            duration: Config.animDuration
++                            easing.type: Easing.OutQuart
++                        }
++                    }
++
++                    Behavior on color {
++                        enabled: Config.animDuration > 0
++                        ColorAnimation {
++                            duration: Config.animDuration
++                        }
++                    }
++                }
++
++                Text {
++                    width: track.height
++                    height: track.height
++                    horizontalAlignment: Text.AlignHCenter
++                    verticalAlignment: Text.AlignVCenter
++                    text: {
++                        if (OsdService.indicator === "volume")
++                            return Audio.volumeIcon(OsdService.value, OsdService.muted);
++                        if (OsdService.indicator === "mic")
++                            return OsdService.muted ? Icons.micSlash : Icons.mic;
++                        return Icons.sun;
++                    }
++                    font.family: Icons.font
++                    font.pixelSize: 14
++                    color: Colors.overPrimary
++                    rotation: root.isBrightness ? root.level * 180 : 0
++
++                    Behavior on rotation {
++                        enabled: Config.animDuration > 0
++                        NumberAnimation {
++                            duration: Config.animDuration
++                            easing.type: Easing.OutQuart
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
+diff --git a/modules/widgets/defaultview/DefaultView.qml b/modules/widgets/defaultview/DefaultView.qml
+index d5f3dca..6c531b8 100644
+--- a/modules/widgets/defaultview/DefaultView.qml
++++ b/modules/widgets/defaultview/DefaultView.qml
+@@ -69,9 +69,8 @@ Item {
+     }
+ 
+     // Computed dimensions
+-    // Compact player grows a little while media is active to fit art + equalizer,
+-    // and a bit more while the volume/brightness OSD takes over the pill
+-    readonly property real compactPlayerWidth: OsdService.visible ? 260 : (activePlayer ? 240 : 200)
++    // Compact player grows a little while media is active to fit art + equalizer
++    readonly property real compactPlayerWidth: activePlayer ? 240 : 200
+     readonly property real mainRowContentWidth: compactPlayerWidth + userInfo.width + separator1.width + separator2.width + notifIndicator.width + (mainRow.spacing * 4) + mainRowMargin
+     readonly property real mainRowHeight: Config.showBackground ? (Config.notchTheme === "island" ? 36 : 44) : (Config.notchTheme === "island" ? 36 : 40)
+     readonly property real notificationMinWidth: expandedState ? 420 : 320
+@@ -166,15 +165,6 @@ Item {
+                 player: activePlayer
+                 notchHovered: expandedState && !mediaCardEnabled
+                 cardOpen: mediaCardOpen
+-                opacity: OsdService.visible ? 0 : 1
+-
+-                Behavior on opacity {
+-                    enabled: Config.animDuration > 0
+-                    NumberAnimation {
+-                        duration: Config.animDuration
+-                        easing.type: Easing.OutQuart
+-                    }
+-                }
+             }
+ 
+             Separator {
+@@ -189,24 +179,6 @@ Item {
+             }
+         }
+ 
+-        NotchOsd {
+-            x: mainRow.x + compactPlayer.x
+-            y: mainRow.y + compactPlayer.y
+-            width: compactPlayer.width
+-            height: compactPlayer.height
+-            z: 3
+-            visible: opacity > 0
+-            opacity: OsdService.visible ? 1 : 0
+-
+-            Behavior on opacity {
+-                enabled: Config.animDuration > 0
+-                NumberAnimation {
+-                    duration: Config.animDuration
+-                    easing.type: Easing.OutQuart
+-                }
+-            }
+-        }
+-
+         Item {
+             id: mediaCardContainer
+             width: parent.width
+diff --git a/modules/widgets/defaultview/NotchOsd.qml b/modules/widgets/defaultview/NotchOsd.qml
+deleted file mode 100644
+index 9bdb147..0000000
+--- a/modules/widgets/defaultview/NotchOsd.qml
++++ /dev/null
+@@ -1,77 +0,0 @@
+-import QtQuick
+-import QtQuick.Layouts
+-import qs.modules.theme
+-import qs.modules.services
+-import qs.modules.components
+-import qs.config
+-
+-// Volume / mic / brightness indicator that takes over the compact player pill.
+-StyledRect {
+-    id: root
+-
+-    variant: "common"
+-    radius: Styling.radius(-4)
+-
+-    readonly property bool isBrightness: OsdService.indicator === "brightness"
+-
+-    RowLayout {
+-        anchors.fill: parent
+-        anchors.leftMargin: 12
+-        anchors.rightMargin: 12
+-        spacing: 10
+-
+-        Text {
+-            text: {
+-                if (OsdService.indicator === "volume")
+-                    return Audio.volumeIcon(OsdService.value, OsdService.muted);
+-                if (OsdService.indicator === "mic")
+-                    return OsdService.muted ? Icons.micSlash : Icons.mic;
+-                return Icons.sun;
+-            }
+-            textFormat: Text.RichText
+-            font.family: Icons.font
+-            font.pixelSize: 16
+-            color: Colors.overBackground
+-            rotation: root.isBrightness ? OsdService.value * 180 : 0
+-            scale: root.isBrightness ? 0.8 + OsdService.value * 0.2 : 1
+-
+-            Behavior on rotation {
+-                enabled: Config.animDuration > 0
+-                NumberAnimation {
+-                    duration: Config.animDuration
+-                    easing.type: Easing.OutQuart
+-                }
+-            }
+-
+-            Behavior on scale {
+-                enabled: Config.animDuration > 0
+-                NumberAnimation {
+-                    duration: Config.animDuration
+-                    easing.type: Easing.OutQuart
+-                }
+-            }
+-        }
+-
+-        StyledSlider {
+-            Layout.fillWidth: true
+-            Layout.preferredHeight: 12
+-            value: OsdService.value
+-            wavy: false
+-            enabled: false
+-            thickness: 3
+-            handleSpacing: 0
+-            progressColor: OsdService.muted ? Colors.outline : Styling.srItem("overprimary")
+-            backgroundColor: Qt.rgba(Colors.overBackground.r, Colors.overBackground.g, Colors.overBackground.b, 0.2)
+-        }
+-
+-        Text {
+-            Layout.preferredWidth: 26
+-            text: Math.round(OsdService.value * 100)
+-            horizontalAlignment: Text.AlignRight
+-            font.family: Config.theme.font
+-            font.pixelSize: Styling.fontSize(0)
+-            font.bold: true
+-            color: OsdService.muted ? Colors.outline : Colors.overBackground
+-        }
+-    }
+-}
+diff --git a/shell.qml b/shell.qml
+index 31b1c2e..def7fc4 100644
+--- a/shell.qml
++++ b/shell.qml
+@@ -23,6 +23,7 @@ import qs.modules.lockscreen
+ import qs.modules.dock
+ import qs.modules.globals
+ import qs.modules.shell
++import qs.modules.shell.osd
+ import qs.config
+ import "modules/tools"
+ 
+@@ -254,6 +255,20 @@ ShellRoot {
+         source: "modules/widgets/config/SettingsWindow.qml"
+     }
+ 
++    // Volume / mic / brightness OSD (top-right card). It only shows on the
++    // focused monitor; the events themselves come from OsdService.
++    Variants {
++        model: Quickshell.screens
++
++        Loader {
++            id: osdLoader
++            required property ShellScreen modelData
++            sourceComponent: OSD {
++                targetScreen: osdLoader.modelData
++            }
++        }
++    }
++
+     // Init clipboard service
+     Connections {
+         target: ClipboardService
+-- 
+2.47.3
+
