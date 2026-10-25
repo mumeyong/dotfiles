@@ -1,7 +1,7 @@
 From 89e559ff13cecc69fe8c12923c7b19c3e81f39a0 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 24 Oct 2026 17:43:19 +0700
-Subject: [PATCH 3/5] Replace assistant sidebar with a keybind cheatsheet
+Subject: [PATCH 3/6] Replace assistant sidebar with a keybind cheatsheet
 
 The assistant sidebar slot (opened with "ambxst run assistant") now
 shows CheatsheetSidebar: every active keybind, grouped (Essentials,

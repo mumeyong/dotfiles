@@ -1,0 +1,488 @@
+From a87ec933db68d258f4b04ce1a8c324d3f0b80af0 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 19:30:01 +0700
+Subject: [PATCH 6/6] Notch: show volume, mic and brightness OSD in the dynamic
+ island
+
+Replace the bottom OSD popup with an indicator that takes over the compact
+player pill: icon, level bar and percentage, with the pill widening while
+it's shown. The Audio/Brightness listeners move to OsdService.
+---
+ modules/globals/GlobalStates.qml            |   4 -
+ modules/services/OsdService.qml             |  53 +++++
+ modules/shell/osd/OSD.qml                   | 207 --------------------
+ modules/widgets/defaultview/DefaultView.qml |  32 ++-
+ modules/widgets/defaultview/NotchOsd.qml    |  77 ++++++++
+ shell.qml                                   |  19 --
+ 6 files changed, 160 insertions(+), 232 deletions(-)
+ create mode 100644 modules/services/OsdService.qml
+ delete mode 100644 modules/shell/osd/OSD.qml
+ create mode 100644 modules/widgets/defaultview/NotchOsd.qml
+
+diff --git a/modules/globals/GlobalStates.qml b/modules/globals/GlobalStates.qml
+index eb6e9cc..63e96ba 100644
+--- a/modules/globals/GlobalStates.qml
++++ b/modules/globals/GlobalStates.qml
+@@ -230,10 +230,6 @@ Singleton {
+     // Lockscreen state
+     property bool lockscreenVisible: false
+ 
+-    // OSD state
+-    property bool osdVisible: false
+-    property string osdIndicator: "volume" // volume, mic, brightness
+-
+     // Screenshot Tool state
+     property bool screenshotToolVisible: false
+     // property string screenshotToolMode: "normal" // DEPRECATED
+diff --git a/modules/services/OsdService.qml b/modules/services/OsdService.qml
+new file mode 100644
+index 0000000..f1a2847
+--- /dev/null
++++ b/modules/services/OsdService.qml
+@@ -0,0 +1,53 @@
++pragma Singleton
++
++import QtQuick
++import Quickshell
++
++// Volume / mic / brightness OSD state, rendered inside the notch (NotchOsd).
++Singleton {
++    id: root
++
++    property bool visible: false
++    property string indicator: "volume" // volume, mic, brightness
++    property real value: 0
++    property bool muted: false
++
++    function show(kind: string, newValue: real, isMuted: bool) {
++        // Brightness and sinks settle right after resume; don't flash then
++        if (!SuspendManager.wakeReady)
++            return;
++        indicator = kind;
++        value = newValue;
++        muted = isMuted;
++        visible = true;
++        hideTimer.restart();
++    }
++
++    function hide() {
++        hideTimer.stop();
++        visible = false;
++    }
++
++    Timer {
++        id: hideTimer
++        interval: 2000
++        onTriggered: root.visible = false
++    }
++
++    Connections {
++        target: Audio
++        function onVolumeChanged(volume, muted, node) {
++            root.show("volume", volume, muted);
++        }
++        function onMicVolumeChanged(volume, muted, node) {
++            root.show("mic", volume, muted);
++        }
++    }
++
++    Connections {
++        target: Brightness
++        function onBrightnessChanged(value, screen) {
++            root.show("brightness", value, false);
++        }
++    }
++}
+diff --git a/modules/shell/osd/OSD.qml b/modules/shell/osd/OSD.qml
+deleted file mode 100644
+index f8bb863..0000000
+--- a/modules/shell/osd/OSD.qml
++++ /dev/null
+@@ -1,207 +0,0 @@
+-pragma ComponentBehavior: Bound
+-import QtQuick
+-import QtQuick.Layouts
+-import Quickshell
+-import Quickshell.Wayland
+-import qs.modules.components
+-import qs.modules.theme
+-import qs.modules.services
+-import qs.modules.globals
+-import qs.config
+-
+-PanelWindow {
+-    id: root
+-
+-    property ShellScreen targetScreen
+-    screen: targetScreen
+-
+-    WlrLayershell.layer: WlrLayer.Overlay
+-    WlrLayershell.namespace: "ambxst:osd"
+-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+-    exclusionMode: ExclusionMode.Ignore
+-
+-    anchors.bottom: true
+-    anchors.left: true
+-    anchors.right: true
+-
+-    WlrLayershell.margins.bottom: 100
+-
+-    color: "transparent"
+-
+-    visible: GlobalStates.osdVisible
+-
+-    // Internal state for responsiveness
+-    property real osdValue: 0
+-    property bool osdMuted: false
+-
+-    // Centering wrapper
+-    Item {
+-        anchors.fill: parent
+-
+-        StyledRect {
+-            id: osdRect
+-            variant: "popup"
+-            anchors.horizontalCenter: parent.horizontalCenter
+-            anchors.bottom: parent.bottom
+-            implicitWidth: 220
+-            implicitHeight: 52
+-            radius: Styling.radius(16)
+-
+-            RowLayout {
+-                anchors.fill: parent
+-                anchors.leftMargin: 12
+-                anchors.rightMargin: 24
+-                anchors.topMargin: 8
+-                anchors.bottomMargin: 8
+-                spacing: 14
+-
+-                Text {
+-                    id: iconText
+-                    text: {
+-                        if (GlobalStates.osdIndicator === "volume") {
+-                            return Audio.volumeIcon(root.osdValue, root.osdMuted);
+-                        } else if (GlobalStates.osdIndicator === "mic") {
+-                            return root.osdMuted ? Icons.micSlash : Icons.mic;
+-                        } else {
+-                            return Icons.sun;
+-                        }
+-                    }
+-                    font.family: Icons.font
+-                    font.pixelSize: 22
+-                    color: Colors.overBackground
+-                    Layout.alignment: Qt.AlignVCenter
+-
+-                    rotation: GlobalStates.osdIndicator === "brightness" ? (root.osdValue * 180) : 0
+-                    scale: GlobalStates.osdIndicator === "brightness" ? (0.8 + (root.osdValue * 0.2)) : 1
+-
+-                    Behavior on rotation {
+-                        enabled: Config.animDuration > 0
+-                        NumberAnimation {
+-                            duration: Config.animDuration
+-                            easing.type: Easing.OutQuart
+-                        }
+-                    }
+-
+-                    Behavior on scale {
+-                        enabled: Config.animDuration > 0
+-                        NumberAnimation {
+-                            duration: Config.animDuration
+-                            easing.type: Easing.OutQuart
+-                        }
+-                    }
+-                }
+-
+-                ColumnLayout {
+-                    Layout.fillWidth: true
+-                    Layout.alignment: Qt.AlignVCenter
+-                    spacing: 0
+-
+-                    RowLayout {
+-                        Layout.fillWidth: true
+-                        spacing: 0
+-
+-                        Text {
+-                            text: {
+-                                if (GlobalStates.osdIndicator === "volume")
+-                                    return I18n.t("osd.volume");
+-                                if (GlobalStates.osdIndicator === "mic")
+-                                    return I18n.t("osd.mic");
+-                                if (GlobalStates.osdIndicator === "brightness")
+-                                    return I18n.t("osd.brightness");
+-                                return "";
+-                            }
+-                            font.family: Config.theme.font
+-                            font.pixelSize: 15
+-                            font.bold: false
+-                            color: Colors.overBackground
+-                            Layout.alignment: Qt.AlignBottom
+-                        }
+-
+-                        Item {
+-                            Layout.fillWidth: true
+-                        }
+-
+-                        Text {
+-                            text: Math.round(root.osdValue * 100)
+-                            font.family: Config.theme.font
+-                            font.pixelSize: 15
+-                            font.bold: false
+-                            color: Colors.overBackground
+-                            Layout.alignment: Qt.AlignBottom
+-                        }
+-                    }
+-
+-                    StyledSlider {
+-                        Layout.fillWidth: true
+-                        Layout.preferredHeight: 12
+-                        value: root.osdValue
+-                        wavy: false
+-                        enabled: false
+-                        thickness: 3
+-                        handleSpacing: 0
+-                        progressColor: root.osdMuted ? Colors.outline : Styling.srItem("overprimary")
+-                        backgroundColor: Qt.rgba(Colors.overBackground.r, Colors.overBackground.g, Colors.overBackground.b, 0.2)
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    // Close on click or hover
+-    MouseArea {
+-        anchors.fill: parent
+-        onEntered: {
+-            hideTimer.stop();
+-            hideTimer.triggered();
+-        }
+-        hoverEnabled: true
+-    }
+-
+-    Timer {
+-        id: hideTimer
+-        interval: 2500
+-        onTriggered: GlobalStates.osdVisible = false
+-    }
+-
+-    Connections {
+-        target: GlobalStates
+-        function onOsdVisibleChanged() {
+-            if (GlobalStates.osdVisible) {
+-                hideTimer.restart();
+-            }
+-        }
+-    }
+-
+-    // Services connections - Direct and responsive
+-    Connections {
+-        target: Audio
+-        function onVolumeChanged(volume, muted, node) {
+-            root.osdValue = volume;
+-            root.osdMuted = muted;
+-            GlobalStates.osdIndicator = "volume";
+-            GlobalStates.osdVisible = true;
+-            hideTimer.restart();
+-        }
+-        function onMicVolumeChanged(volume, muted, node) {
+-            root.osdValue = volume;
+-            root.osdMuted = muted;
+-            GlobalStates.osdIndicator = "mic";
+-            GlobalStates.osdVisible = true;
+-            hideTimer.restart();
+-        }
+-    }
+-
+-    Connections {
+-        target: Brightness
+-        function onBrightnessChanged(value, screen) {
+-            // Check if the change happened on THIS screen or if it's a sync change
+-            if (!screen || !root.targetScreen || screen.name === root.targetScreen.name || Brightness.syncBrightness) {
+-                root.osdValue = value;
+-                root.osdMuted = false;
+-                GlobalStates.osdIndicator = "brightness";
+-                GlobalStates.osdVisible = true;
+-                hideTimer.restart();
+-            }
+-        }
+-    }
+-}
+diff --git a/modules/widgets/defaultview/DefaultView.qml b/modules/widgets/defaultview/DefaultView.qml
+index 6c531b8..d5f3dca 100644
+--- a/modules/widgets/defaultview/DefaultView.qml
++++ b/modules/widgets/defaultview/DefaultView.qml
+@@ -69,8 +69,9 @@ Item {
+     }
+ 
+     // Computed dimensions
+-    // Compact player grows a little while media is active to fit art + equalizer
+-    readonly property real compactPlayerWidth: activePlayer ? 240 : 200
++    // Compact player grows a little while media is active to fit art + equalizer,
++    // and a bit more while the volume/brightness OSD takes over the pill
++    readonly property real compactPlayerWidth: OsdService.visible ? 260 : (activePlayer ? 240 : 200)
+     readonly property real mainRowContentWidth: compactPlayerWidth + userInfo.width + separator1.width + separator2.width + notifIndicator.width + (mainRow.spacing * 4) + mainRowMargin
+     readonly property real mainRowHeight: Config.showBackground ? (Config.notchTheme === "island" ? 36 : 44) : (Config.notchTheme === "island" ? 36 : 40)
+     readonly property real notificationMinWidth: expandedState ? 420 : 320
+@@ -165,6 +166,15 @@ Item {
+                 player: activePlayer
+                 notchHovered: expandedState && !mediaCardEnabled
+                 cardOpen: mediaCardOpen
++                opacity: OsdService.visible ? 0 : 1
++
++                Behavior on opacity {
++                    enabled: Config.animDuration > 0
++                    NumberAnimation {
++                        duration: Config.animDuration
++                        easing.type: Easing.OutQuart
++                    }
++                }
+             }
+ 
+             Separator {
+@@ -179,6 +189,24 @@ Item {
+             }
+         }
+ 
++        NotchOsd {
++            x: mainRow.x + compactPlayer.x
++            y: mainRow.y + compactPlayer.y
++            width: compactPlayer.width
++            height: compactPlayer.height
++            z: 3
++            visible: opacity > 0
++            opacity: OsdService.visible ? 1 : 0
++
++            Behavior on opacity {
++                enabled: Config.animDuration > 0
++                NumberAnimation {
++                    duration: Config.animDuration
++                    easing.type: Easing.OutQuart
++                }
++            }
++        }
++
+         Item {
+             id: mediaCardContainer
+             width: parent.width
+diff --git a/modules/widgets/defaultview/NotchOsd.qml b/modules/widgets/defaultview/NotchOsd.qml
+new file mode 100644
+index 0000000..9bdb147
+--- /dev/null
++++ b/modules/widgets/defaultview/NotchOsd.qml
+@@ -0,0 +1,77 @@
++import QtQuick
++import QtQuick.Layouts
++import qs.modules.theme
++import qs.modules.services
++import qs.modules.components
++import qs.config
++
++// Volume / mic / brightness indicator that takes over the compact player pill.
++StyledRect {
++    id: root
++
++    variant: "common"
++    radius: Styling.radius(-4)
++
++    readonly property bool isBrightness: OsdService.indicator === "brightness"
++
++    RowLayout {
++        anchors.fill: parent
++        anchors.leftMargin: 12
++        anchors.rightMargin: 12
++        spacing: 10
++
++        Text {
++            text: {
++                if (OsdService.indicator === "volume")
++                    return Audio.volumeIcon(OsdService.value, OsdService.muted);
++                if (OsdService.indicator === "mic")
++                    return OsdService.muted ? Icons.micSlash : Icons.mic;
++                return Icons.sun;
++            }
++            textFormat: Text.RichText
++            font.family: Icons.font
++            font.pixelSize: 16
++            color: Colors.overBackground
++            rotation: root.isBrightness ? OsdService.value * 180 : 0
++            scale: root.isBrightness ? 0.8 + OsdService.value * 0.2 : 1
++
++            Behavior on rotation {
++                enabled: Config.animDuration > 0
++                NumberAnimation {
++                    duration: Config.animDuration
++                    easing.type: Easing.OutQuart
++                }
++            }
++
++            Behavior on scale {
++                enabled: Config.animDuration > 0
++                NumberAnimation {
++                    duration: Config.animDuration
++                    easing.type: Easing.OutQuart
++                }
++            }
++        }
++
++        StyledSlider {
++            Layout.fillWidth: true
++            Layout.preferredHeight: 12
++            value: OsdService.value
++            wavy: false
++            enabled: false
++            thickness: 3
++            handleSpacing: 0
++            progressColor: OsdService.muted ? Colors.outline : Styling.srItem("overprimary")
++            backgroundColor: Qt.rgba(Colors.overBackground.r, Colors.overBackground.g, Colors.overBackground.b, 0.2)
++        }
++
++        Text {
++            Layout.preferredWidth: 26
++            text: Math.round(OsdService.value * 100)
++            horizontalAlignment: Text.AlignRight
++            font.family: Config.theme.font
++            font.pixelSize: Styling.fontSize(0)
++            font.bold: true
++            color: OsdService.muted ? Colors.outline : Colors.overBackground
++        }
++    }
++}
+diff --git a/shell.qml b/shell.qml
+index 888996d..31b1c2e 100644
+--- a/shell.qml
++++ b/shell.qml
+@@ -24,7 +24,6 @@ import qs.modules.dock
+ import qs.modules.globals
+ import qs.modules.shell
+ import qs.config
+-import qs.modules.shell.osd
+ import "modules/tools"
+ 
+ ShellRoot {
+@@ -255,24 +254,6 @@ ShellRoot {
+         source: "modules/widgets/config/SettingsWindow.qml"
+     }
+ 
+-    // On-screen display — always live so its Audio/Brightness Connections
+-    // can flip GlobalStates.osdVisible on volume/brightness events. Gating
+-    // the loader on osdVisible would create a chicken-and-egg loop:
+-    // the OSD is the only thing that sets osdVisible true, but it has
+-    // to be loaded before its signal handlers can run.
+-    Variants {
+-        model: Quickshell.screens
+-
+-        Loader {
+-            id: osdLoader
+-            active: SuspendManager.wakeReady
+-            required property ShellScreen modelData
+-            sourceComponent: OSD {
+-                targetScreen: osdLoader.modelData
+-            }
+-        }
+-    }
+-
+     // Init clipboard service
+     Connections {
+         target: ClipboardService
+-- 
+2.47.3
+

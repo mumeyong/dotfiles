@@ -1,7 +1,7 @@
 From 89ceee3345b8780bcfb66e31d0218f236bcb222d Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 24 Oct 2026 16:46:27 +0700
-Subject: [PATCH 2/5] Bar: smaller pin button (28px)
+Subject: [PATCH 2/6] Bar: smaller pin button (28px)
 
 ---
  modules/bar/BarContent.qml | 8 ++++----
