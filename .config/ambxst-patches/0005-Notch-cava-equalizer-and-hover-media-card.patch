@@ -1,0 +1,772 @@
+From 1c93cba3f16a18494614df0b7037b82e77f4aea8 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 19:07:25 +0700
+Subject: [PATCH 5/5] Notch: cava equalizer and hover media card
+
+The compact player shows the artwork, the track and live cava bars tinted
+from the album art. Hover expansion now opens a media card under the main
+row with large artwork, title, artist, a seekable progress bar with times
+and playback controls; the notch background grows with it like it does for
+notifications.
+---
+ assets/cava/notch.conf                        |  24 ++
+ modules/notch/Notch.qml                       |  53 ++--
+ modules/services/CavaService.qml              |  37 +++
+ modules/widgets/defaultview/CavaBars.qml      |  35 +++
+ modules/widgets/defaultview/CompactPlayer.qml | 101 ++++++-
+ modules/widgets/defaultview/DefaultView.qml   |  48 +++-
+ modules/widgets/defaultview/MediaCard.qml     | 254 ++++++++++++++++++
+ 7 files changed, 521 insertions(+), 31 deletions(-)
+ create mode 100644 assets/cava/notch.conf
+ create mode 100644 modules/services/CavaService.qml
+ create mode 100644 modules/widgets/defaultview/CavaBars.qml
+ create mode 100644 modules/widgets/defaultview/MediaCard.qml
+
+diff --git a/assets/cava/notch.conf b/assets/cava/notch.conf
+new file mode 100644
+index 0000000..6c75afc
+--- /dev/null
++++ b/assets/cava/notch.conf
+@@ -0,0 +1,24 @@
++# Cava config for the notch visualizer (CavaService.qml).
++# Raw ASCII output: one line per frame, bar values 0-100 separated by ';'.
++
++[general]
++framerate = 60
++bars = 8
++autosens = 1
++
++[input]
++method = pulse
++source = auto
++
++[output]
++method = raw
++raw_target = /dev/stdout
++data_format = ascii
++ascii_max_range = 100
++bar_delimiter = 59
++frame_delimiter = 10
++channels = mono
++mono_option = average
++
++[smoothing]
++noise_reduction = 77
+diff --git a/modules/notch/Notch.qml b/modules/notch/Notch.qml
+index 28e30cf..47afc4e 100644
+--- a/modules/notch/Notch.qml
++++ b/modules/notch/Notch.qml
+@@ -44,9 +44,12 @@ Item {
+     property var visibilities
+     readonly property bool screenNotchOpen: visibilities ? (visibilities.launcher || visibilities.dashboard || visibilities.powermenu || visibilities.tools) : false
+     readonly property bool hasActiveNotifications: Notifications.popupList.length > 0
++    // DefaultView content that grows past the main row (notification popups, media card)
++    readonly property bool mediaCardOpen: stackViewInternal.currentItem?.mediaCardOpen ?? false
++    readonly property bool contentExpanded: hasActiveNotifications || mediaCardOpen
+ 
+-    property int defaultHeight: Config.showBackground ? (screenNotchOpen || hasActiveNotifications ? Math.max(stackContainer.height, 44) : 44) : (screenNotchOpen || hasActiveNotifications ? Math.max(stackContainer.height, 40) : 40)
+-    property int islandHeight: screenNotchOpen || hasActiveNotifications ? Math.max(stackContainer.height, 36) : 36
++    property int defaultHeight: Config.showBackground ? (screenNotchOpen || contentExpanded ? Math.max(stackContainer.height, 44) : 44) : (screenNotchOpen || contentExpanded ? Math.max(stackContainer.height, 40) : 40)
++    property int islandHeight: screenNotchOpen || contentExpanded ? Math.max(stackContainer.height, 36) : 36
+ 
+     readonly property string position: Config.notchPosition ?? "top"
+ 
+@@ -96,7 +99,7 @@ Item {
+         enableBorder: false // No usar border de StyledRect, el Canvas se encarga
+         animateRadius: false // Custom animation below
+ 
+-        property int defaultRadius: Config.roundness > 0 ? (screenNotchOpen || hasActiveNotifications ? Config.roundness + 20 : Config.roundness + 4) : 0
++        property int defaultRadius: Config.roundness > 0 ? (screenNotchOpen || contentExpanded ? Config.roundness + 20 : Config.roundness + 4) : 0
+ 
+         topLeftRadius: notchContainer.position === "bottom" ? defaultRadius : 0
+         topRightRadius: notchContainer.position === "bottom" ? defaultRadius : 0
+@@ -107,8 +110,8 @@ Item {
+             enabled: Config.animDuration > 0
+             NumberAnimation {
+                 duration: Config.animDuration
+-                easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+             }
+         }
+ 
+@@ -116,8 +119,8 @@ Item {
+             enabled: Config.animDuration > 0
+             NumberAnimation {
+                 duration: Config.animDuration
+-                easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+             }
+         }
+ 
+@@ -125,8 +128,8 @@ Item {
+             enabled: Config.animDuration > 0
+             NumberAnimation {
+                 duration: Config.animDuration
+-                easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+             }
+         }
+ 
+@@ -134,8 +137,8 @@ Item {
+             enabled: Config.animDuration > 0
+             NumberAnimation {
+                 duration: Config.animDuration
+-                easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+             }
+         }
+ 
+@@ -218,22 +221,22 @@ Item {
+         width: parent.implicitWidth - totalCornerWidth
+         height: parent.implicitHeight
+ 
+-        property int defaultRadius: Config.roundness > 0 ? (screenNotchOpen || hasActiveNotifications ? Config.roundness + 20 : Config.roundness + 4) : 0
+-        property int islandRadius: Config.roundness > 0 ? (screenNotchOpen || hasActiveNotifications ? Config.roundness + 20 : Config.roundness + 4) : 0
++        property int defaultRadius: Config.roundness > 0 ? (screenNotchOpen || contentExpanded ? Config.roundness + 20 : Config.roundness + 4) : 0
++        property int islandRadius: Config.roundness > 0 ? (screenNotchOpen || contentExpanded ? Config.roundness + 20 : Config.roundness + 4) : 0
+ 
+         // Helper function to check if we're actually showing the DefaultView
+         function isActuallyShowingDefault() {
+             return stackViewInternal.currentItem && stackViewInternal.depth === 1;
+         }
+ 
+-        property int topLeftRadius: Config.notchTheme === "default" ? (notchContainer.position === "bottom" ? defaultRadius : 0) : (Config.notchTheme === "island" && hasActiveNotifications && isActuallyShowingDefault() && notchContainer.position === "top" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at top
++        property int topLeftRadius: Config.notchTheme === "default" ? (notchContainer.position === "bottom" ? defaultRadius : 0) : (Config.notchTheme === "island" && contentExpanded && isActuallyShowingDefault() && notchContainer.position === "top" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at top
+             : islandRadius)  // Otherwise use dynamic islandRadius
+-        property int topRightRadius: Config.notchTheme === "default" ? (notchContainer.position === "bottom" ? defaultRadius : 0) : (Config.notchTheme === "island" && hasActiveNotifications && isActuallyShowingDefault() && notchContainer.position === "top" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at top
++        property int topRightRadius: Config.notchTheme === "default" ? (notchContainer.position === "bottom" ? defaultRadius : 0) : (Config.notchTheme === "island" && contentExpanded && isActuallyShowingDefault() && notchContainer.position === "top" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at top
+             : islandRadius)  // Otherwise use dynamic islandRadius
+-        property int bottomLeftRadius: Config.notchTheme === "island" ? (hasActiveNotifications && isActuallyShowingDefault() && notchContainer.position === "bottom" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at bottom
++        property int bottomLeftRadius: Config.notchTheme === "island" ? (contentExpanded && isActuallyShowingDefault() && notchContainer.position === "bottom" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at bottom
+             : islandRadius)  // Otherwise use dynamic islandRadius
+         : (notchContainer.position === "top" ? defaultRadius : 0)
+-        property int bottomRightRadius: Config.notchTheme === "island" ? (hasActiveNotifications && isActuallyShowingDefault() && notchContainer.position === "bottom" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at bottom
++        property int bottomRightRadius: Config.notchTheme === "island" ? (contentExpanded && isActuallyShowingDefault() && notchContainer.position === "bottom" ? (Config.roundness > 0 ? Config.roundness + 4 : 0)  // Small radius only when in DefaultView with notifications at bottom
+             : islandRadius)  // Otherwise use dynamic islandRadius
+         : (notchContainer.position === "top" ? defaultRadius : 0)
+ 
+@@ -260,8 +263,8 @@ Item {
+                 enabled: Config.animDuration > 0
+                 NumberAnimation {
+                     duration: Config.animDuration
+-                    easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                    easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                    easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                    easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+                 }
+             }
+ 
+@@ -269,8 +272,8 @@ Item {
+                 enabled: Config.animDuration > 0
+                 NumberAnimation {
+                     duration: Config.animDuration
+-                    easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                    easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                    easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                    easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+                 }
+             }
+ 
+@@ -278,8 +281,8 @@ Item {
+                 enabled: Config.animDuration > 0
+                 NumberAnimation {
+                     duration: Config.animDuration
+-                    easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                    easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                    easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                    easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+                 }
+             }
+ 
+@@ -287,8 +290,8 @@ Item {
+                 enabled: Config.animDuration > 0
+                 NumberAnimation {
+                     duration: Config.animDuration
+-                    easing.type: screenNotchOpen || hasActiveNotifications ? Easing.OutBack : Easing.OutQuart
+-                    easing.overshoot: screenNotchOpen || hasActiveNotifications ? 1.2 : 1.0
++                    easing.type: screenNotchOpen || contentExpanded ? Easing.OutBack : Easing.OutQuart
++                    easing.overshoot: screenNotchOpen || contentExpanded ? 1.2 : 1.0
+                 }
+             }
+         }
+diff --git a/modules/services/CavaService.qml b/modules/services/CavaService.qml
+new file mode 100644
+index 0000000..44f4c3b
+--- /dev/null
++++ b/modules/services/CavaService.qml
+@@ -0,0 +1,37 @@
++pragma Singleton
++
++import QtQuick
++import Quickshell
++import Quickshell.Io
++
++// Audio spectrum for the notch visualizer. Runs a private cava instance
++// (assets/cava/notch.conf) only while the active MPRIS player is playing.
++Singleton {
++    id: root
++
++    // Must match `bars` in assets/cava/notch.conf
++    readonly property int barCount: 8
++    // Bar levels in 0..1. All zeros while cava is stopped.
++    property var values: Array(barCount).fill(0)
++
++    Process {
++        id: cavaProcess
++        running: MprisController.isPlaying
++        command: ["cava", "-p", Quickshell.shellDir + "/assets/cava/notch.conf"]
++
++        stdout: SplitParser {
++            onRead: data => {
++                const parts = data.split(";");
++                const next = [];
++                for (let i = 0; i < root.barCount; i++)
++                    next.push((parseInt(parts[i]) || 0) / 100);
++                root.values = next;
++            }
++        }
++
++        onRunningChanged: {
++            if (!running)
++                root.values = Array(root.barCount).fill(0);
++        }
++    }
++}
+diff --git a/modules/widgets/defaultview/CavaBars.qml b/modules/widgets/defaultview/CavaBars.qml
+new file mode 100644
+index 0000000..4aad789
+--- /dev/null
++++ b/modules/widgets/defaultview/CavaBars.qml
+@@ -0,0 +1,35 @@
++import QtQuick
++import qs.modules.services
++import qs.config
++
++// Center-aligned equalizer bars fed by CavaService.
++Row {
++    id: root
++
++    property color color: "white"
++    property real barWidth: 3
++
++    spacing: 2
++
++    Behavior on color {
++        enabled: Config.animDuration > 0
++        ColorAnimation {
++            duration: Config.animDuration
++            easing.type: Easing.OutQuart
++        }
++    }
++
++    Repeater {
++        model: CavaService.barCount
++
++        Rectangle {
++            required property int index
++
++            anchors.verticalCenter: parent.verticalCenter
++            width: root.barWidth
++            height: Math.max(root.barWidth, root.height * (CavaService.values[index] ?? 0))
++            radius: width / 2
++            color: root.color
++        }
++    }
++}
+diff --git a/modules/widgets/defaultview/CompactPlayer.qml b/modules/widgets/defaultview/CompactPlayer.qml
+index f4255e6..69c4b59 100644
+--- a/modules/widgets/defaultview/CompactPlayer.qml
++++ b/modules/widgets/defaultview/CompactPlayer.qml
+@@ -17,6 +17,14 @@ Item {
+ 
+     required property var player
+     required property bool notchHovered
++    // Media card open below: the row shows the source app instead of the track
++    property bool cardOpen: false
++
++    readonly property var playerEntry: {
++        const id = player?.desktopEntry || player?.identity || "";
++        return id ? DesktopEntries.heuristicLookup(id) : null;
++    }
++    readonly property string playerName: playerEntry?.name || player?.identity || ""
+ 
+     onPlayerChanged: {
+         if (!player) {
+@@ -28,6 +36,33 @@ Item {
+     property real position: player?.position ?? 0.0
+     property real length: player?.length ?? 1.0
+     property bool hasArtwork: (player?.trackArtUrl ?? "") !== ""
++
++    // Visualizer tint picked from the album art (most vivid swatch, lifted so it
++    // reads on the dark notch). Falls back to the theme primary when the art
++    // can't be sampled (ColorQuantizer only reads local files).
++    ColorQuantizer {
++        id: artQuantizer
++        source: compactPlayer.hasArtwork ? compactPlayer.player.trackArtUrl : ""
++        depth: 2
++        rescaleSize: 32
++    }
++
++    readonly property color accentColor: {
++        const swatches = artQuantizer.colors;
++        if (!hasArtwork || !swatches || swatches.length === 0)
++            return Colors.primary;
++        let best = swatches[0];
++        let bestScore = -1;
++        for (let i = 0; i < swatches.length; i++) {
++            const score = swatches[i].hsvSaturation * swatches[i].hsvValue;
++            if (score > bestScore) {
++                best = swatches[i];
++                bestScore = score;
++            }
++        }
++        return Qt.hsla(Math.max(0, best.hslHue), best.hslSaturation, Math.max(0.65, best.hslLightness), 1);
++    }
++
+     property string wallpaperPath: {
+         if (!GlobalStates.wallpaperManager) return "";
+         let path = GlobalStates.wallpaperManager.currentWallpaper;
+@@ -140,7 +175,7 @@ Item {
+             color: Colors.overBackground
+             elide: Text.ElideRight
+             visible: opacity > 0
+-            opacity: (compactPlayer.notchHovered && compactPlayer.player) ? 0.0 : 1.0
++            opacity: compactPlayer.player ? 0.0 : 1.0
+             horizontalAlignment: Text.AlignHCenter
+             z: 5
+ 
+@@ -153,6 +188,70 @@ Item {
+             }
+         }
+ 
++        // Idle media view: artwork, title and live equalizer
++        RowLayout {
++            id: idleMediaRow
++            anchors.fill: parent
++            anchors.leftMargin: 6
++            anchors.rightMargin: 10
++            spacing: 8
++            z: 5
++            visible: opacity > 0
++            opacity: (compactPlayer.player && !compactPlayer.notchHovered) ? 1.0 : 0.0
++
++            Behavior on opacity {
++                enabled: Config.animDuration > 0
++                NumberAnimation {
++                    duration: Config.animDuration
++                    easing.type: Easing.OutQuart
++                }
++            }
++
++            ClippingRectangle {
++                Layout.preferredWidth: 20
++                Layout.preferredHeight: 20
++                radius: Styling.radius(-8)
++                color: "transparent"
++                visible: !compactPlayer.cardOpen
++
++                Image {
++                    anchors.fill: parent
++                    mipmap: true
++                    source: (compactPlayer.player?.trackArtUrl ?? "") !== "" ? compactPlayer.player.trackArtUrl : compactPlayer.wallpaperPath
++                    sourceSize: Qt.size(40, 40)
++                    fillMode: Image.PreserveAspectCrop
++                    asynchronous: true
++                }
++            }
++
++            IconImage {
++                Layout.preferredWidth: 18
++                Layout.preferredHeight: 18
++                visible: compactPlayer.cardOpen && compactPlayer.playerEntry !== null
++                source: compactPlayer.playerEntry ? Quickshell.iconPath(compactPlayer.playerEntry.icon, true) : ""
++            }
++
++            Text {
++                Layout.fillWidth: true
++                text: compactPlayer.cardOpen ? compactPlayer.playerName : compactPlayer.displayedTitle
++                horizontalAlignment: compactPlayer.cardOpen ? Text.AlignHCenter : Text.AlignLeft
++                font.family: Config.theme.font
++                font.pixelSize: Styling.fontSize(0)
++                font.bold: true
++                color: Colors.overBackground
++                elide: Text.ElideRight
++                layer.enabled: true
++                layer.effect: BgShadow {}
++            }
++
++            CavaBars {
++                Layout.preferredHeight: 16
++                visible: !compactPlayer.cardOpen
++                color: compactPlayer.accentColor
++                opacity: compactPlayer.isPlaying ? 1.0 : 0.5
++            }
++        }
++
+         ClippingRectangle {
+             anchors.fill: parent
+             radius: Styling.radius(-4)
+diff --git a/modules/widgets/defaultview/DefaultView.qml b/modules/widgets/defaultview/DefaultView.qml
+index c75a7ad..6c531b8 100644
+--- a/modules/widgets/defaultview/DefaultView.qml
++++ b/modules/widgets/defaultview/DefaultView.qml
+@@ -34,11 +34,14 @@ Item {
+     readonly property bool expandedState: contentHoverHandler.hovered || notchHovered || parentHoverActive || isNavigating || Visibilities.playerMenuOpen
+ 
+     property bool mediaHoverExpanded: false
++    // Hover expansion opens the media card; the compact row then keeps its idle look
++    readonly property bool mediaCardEnabled: activePlayer !== null && !hasActiveNotifications && !(Config.notch.disableHoverExpansion ?? true)
++    readonly property bool mediaCardOpen: mediaHoverExpanded && mediaCardEnabled
+ 
+     Timer {
+         id: mediaHoverTimer
+-        interval: 1000
+-        running: expandedState && activePlayer !== null && !hasActiveNotifications && !mediaHoverExpanded && !(Config.notch.disableHoverExpansion ?? true)
++        interval: 350
++        running: expandedState && mediaCardEnabled && !mediaHoverExpanded
+         onTriggered: mediaHoverExpanded = true
+     }
+ 
+@@ -66,14 +69,17 @@ Item {
+     }
+ 
+     // Computed dimensions
+-    readonly property real mainRowContentWidth: 200 + userInfo.width + separator1.width + separator2.width + notifIndicator.width + (mainRow.spacing * 4) + mainRowMargin
++    // Compact player grows a little while media is active to fit art + equalizer
++    readonly property real compactPlayerWidth: activePlayer ? 240 : 200
++    readonly property real mainRowContentWidth: compactPlayerWidth + userInfo.width + separator1.width + separator2.width + notifIndicator.width + (mainRow.spacing * 4) + mainRowMargin
+     readonly property real mainRowHeight: Config.showBackground ? (Config.notchTheme === "island" ? 36 : 44) : (Config.notchTheme === "island" ? 36 : 40)
+     readonly property real notificationMinWidth: expandedState ? 420 : 320
+     readonly property real notificationContainerHeight: notificationView.implicitHeight + notificationPaddingTop + notificationPaddingBottom
++    readonly property real mediaCardContainerHeight: mediaCard.implicitHeight + notificationPaddingTop + notificationPaddingBottom
+ 
+     implicitWidth: Math.round((hasActiveNotifications || mediaHoverExpanded) ? Math.max(notificationMinWidth + (notificationPadding * 2), mainRowContentWidth) : mainRowContentWidth)
+ 
+-    implicitHeight: hasActiveNotifications ? mainRowHeight + notificationContainerHeight : mainRowHeight
++    implicitHeight: hasActiveNotifications ? mainRowHeight + notificationContainerHeight : (mediaCardOpen ? mainRowHeight + mediaCardContainerHeight : mainRowHeight)
+ 
+     Behavior on implicitWidth {
+         enabled: Config.animDuration > 0
+@@ -152,11 +158,13 @@ Item {
+             }
+ 
+             CompactPlayer {
++                id: compactPlayer
+                 anchors.verticalCenter: parent.verticalCenter
+                 width: parent.width - userInfo.width - separator1.width - separator2.width - notifIndicator.width - (parent.spacing * 4)
+                 height: 32
+                 player: activePlayer
+-                notchHovered: expandedState
++                notchHovered: expandedState && !mediaCardEnabled
++                cardOpen: mediaCardOpen
+             }
+ 
+             Separator {
+@@ -171,6 +179,36 @@ Item {
+             }
+         }
+ 
++        Item {
++            id: mediaCardContainer
++            width: parent.width
++            height: mediaCardOpen ? mediaCardContainerHeight : 0
++            visible: opacity > 0
++            opacity: mediaCardOpen ? 1 : 0
++            anchors.top: isBottom ? undefined : mainRow.bottom
++            anchors.bottom: isBottom ? mainRow.top : undefined
++
++            Behavior on opacity {
++                enabled: Config.animDuration > 0
++                NumberAnimation {
++                    duration: Config.animDuration
++                    easing.type: Easing.OutQuart
++                }
++            }
++
++            MediaCard {
++                id: mediaCard
++                anchors.fill: parent
++                anchors.topMargin: notificationPaddingTop
++                anchors.leftMargin: notificationPadding
++                anchors.rightMargin: notificationPadding
++                anchors.bottomMargin: notificationPaddingBottom
++                player: activePlayer
++                active: mediaCardOpen
++                accentColor: compactPlayer.accentColor
++            }
++        }
++
+         // Notification container with its own padding
+         Item {
+             id: notificationContainer
+diff --git a/modules/widgets/defaultview/MediaCard.qml b/modules/widgets/defaultview/MediaCard.qml
+new file mode 100644
+index 0000000..4f4f55a
+--- /dev/null
++++ b/modules/widgets/defaultview/MediaCard.qml
+@@ -0,0 +1,254 @@
++import QtQuick
++import QtQuick.Layouts
++import Quickshell.Widgets
++import Quickshell.Services.Mpris
++import qs.modules.theme
++import qs.modules.services
++import qs.modules.components
++import qs.config
++
++// Expanded media card shown under the notch's main row on hover.
++Item {
++    id: root
++
++    required property var player
++    property bool active: false
++    property color accentColor: Colors.primary
++
++    readonly property bool isPlaying: player?.playbackState === MprisPlaybackState.Playing
++    readonly property real position: player?.position ?? 0.0
++    readonly property real length: player?.length ?? 0.0
++    readonly property string artSource: player?.trackArtUrl ?? ""
++
++    implicitHeight: 72 + 12 + 36
++
++    function formatTime(seconds) {
++        const s = Math.max(0, Math.floor(seconds));
++        return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
++    }
++
++    Timer {
++        running: root.active && root.isPlaying
++        interval: 1000
++        repeat: true
++        triggeredOnStart: true
++        onTriggered: {
++            root.player?.positionChanged();
++            if (!positionSlider.isDragging)
++                positionSlider.value = root.length > 0 ? Math.min(1.0, root.position / root.length) : 0;
++        }
++    }
++
++    component CardButton: Text {
++        property string icon: ""
++        signal clicked
++
++        text: icon
++        textFormat: Text.RichText
++        font.family: Icons.font
++        font.pixelSize: 18
++        color: buttonArea.containsMouse ? Styling.srItem("overprimary") : Colors.overBackground
++
++        Behavior on color {
++            enabled: Config.animDuration > 0
++            ColorAnimation {
++                duration: Config.animDuration
++                easing.type: Easing.OutQuart
++            }
++        }
++
++        MouseArea {
++            id: buttonArea
++            anchors.fill: parent
++            anchors.margins: -6
++            hoverEnabled: true
++            cursorShape: Qt.PointingHandCursor
++            enabled: parent.enabled
++            onClicked: parent.clicked()
++        }
++    }
++
++    ColumnLayout {
++        anchors.fill: parent
++        spacing: 12
++
++        RowLayout {
++            Layout.fillWidth: true
++            Layout.preferredHeight: 72
++            spacing: 14
++
++            ClippingRectangle {
++                Layout.preferredWidth: 72
++                Layout.preferredHeight: 72
++                radius: Styling.radius(0)
++                color: Colors.surface
++
++                Image {
++                    anchors.fill: parent
++                    mipmap: true
++                    source: root.artSource
++                    sourceSize: Qt.size(144, 144)
++                    fillMode: Image.PreserveAspectCrop
++                    asynchronous: true
++                }
++            }
++
++            ColumnLayout {
++                Layout.fillWidth: true
++                Layout.fillHeight: true
++                spacing: 2
++
++                RowLayout {
++                    Layout.fillWidth: true
++                    spacing: 8
++
++                    Text {
++                        Layout.fillWidth: true
++                        text: root.player?.trackTitle || I18n.t("player.unknown")
++                        color: Colors.overBackground
++                        font.family: Config.theme.font
++                        font.pixelSize: Config.theme.fontSize + 2
++                        font.weight: Font.Bold
++                        elide: Text.ElideRight
++                        maximumLineCount: 1
++                    }
++
++                    CavaBars {
++                        Layout.preferredHeight: 18
++                        color: root.accentColor
++                        opacity: root.isPlaying ? 1.0 : 0.5
++                    }
++                }
++
++                Text {
++                    Layout.fillWidth: true
++                    text: root.player?.trackArtist ?? ""
++                    visible: text !== ""
++                    color: Colors.overBackground
++                    font.family: Config.theme.font
++                    font.pixelSize: Config.theme.fontSize
++                    opacity: 0.7
++                    elide: Text.ElideRight
++                    maximumLineCount: 1
++                }
++
++                Item {
++                    Layout.fillHeight: true
++                }
++
++                RowLayout {
++                    Layout.fillWidth: true
++                    spacing: 8
++
++                    Text {
++                        text: root.formatTime(root.position)
++                        color: Colors.overBackground
++                        font.family: Config.theme.font
++                        font.pixelSize: Styling.fontSize(-2)
++                        opacity: 0.7
++                    }
++
++                    PositionSlider {
++                        id: positionSlider
++                        Layout.fillWidth: true
++                        Layout.fillHeight: false
++                        Layout.preferredHeight: 4
++                        player: root.player
++                    }
++
++                    Text {
++                        text: root.length > 0 ? "-" + root.formatTime(root.length - root.position) : "--:--"
++                        color: Colors.overBackground
++                        font.family: Config.theme.font
++                        font.pixelSize: Styling.fontSize(-2)
++                        opacity: 0.7
++                    }
++                }
++            }
++        }
++
++        RowLayout {
++            Layout.alignment: Qt.AlignHCenter
++            Layout.preferredHeight: 36
++            spacing: 24
++
++            CardButton {
++                icon: {
++                    if (MprisController.hasShuffle)
++                        return Icons.shuffle;
++                    if (MprisController.loopState === MprisLoopState.Track)
++                        return Icons.repeatOnce;
++                    if (MprisController.loopState === MprisLoopState.Playlist)
++                        return Icons.repeat;
++                    return Icons.shuffle;
++                }
++                enabled: MprisController.shuffleSupported || MprisController.loopSupported
++                opacity: (enabled && (MprisController.hasShuffle || MprisController.loopState !== MprisLoopState.None)) ? 1.0 : 0.3
++                onClicked: {
++                    if (MprisController.hasShuffle) {
++                        MprisController.setShuffle(false);
++                        MprisController.setLoopState(MprisLoopState.Playlist);
++                    } else if (MprisController.loopState === MprisLoopState.Playlist) {
++                        MprisController.setLoopState(MprisLoopState.Track);
++                    } else if (MprisController.loopState === MprisLoopState.Track) {
++                        MprisController.setLoopState(MprisLoopState.None);
++                    } else {
++                        MprisController.setShuffle(true);
++                    }
++                }
++            }
++
++            CardButton {
++                icon: Icons.previous
++                enabled: MprisController.canGoPrevious
++                opacity: enabled ? 1.0 : 0.3
++                onClicked: MprisController.previous()
++            }
++
++            StyledRect {
++                id: playPauseBtn
++                Layout.preferredWidth: 36
++                Layout.preferredHeight: 36
++                variant: "primary"
++                animateRadius: false
++                radius: root.isPlaying ? Styling.radius(-4) : Styling.radius(12)
++
++                Behavior on radius {
++                    enabled: Config.animDuration > 0
++                    NumberAnimation {
++                        duration: Config.animDuration
++                        easing.type: Easing.OutBack
++                    }
++                }
++
++                Text {
++                    anchors.centerIn: parent
++                    text: root.isPlaying ? Icons.pause : Icons.play
++                    textFormat: Text.RichText
++                    font.family: Icons.font
++                    font.pixelSize: 18
++                    color: playPauseBtn.item
++                }
++
++                MouseArea {
++                    anchors.fill: parent
++                    cursorShape: Qt.PointingHandCursor
++                    enabled: MprisController.canTogglePlaying
++                    onClicked: MprisController.togglePlaying()
++                }
++            }
++
++            CardButton {
++                icon: Icons.next
++                enabled: MprisController.canGoNext
++                opacity: enabled ? 1.0 : 0.3
++                onClicked: MprisController.next()
++            }
++
++            CardButton {
++                icon: Icons.player
++                onClicked: MprisController.cyclePlayer(1)
++            }
++        }
++    }
++}
+-- 
+2.47.3
+

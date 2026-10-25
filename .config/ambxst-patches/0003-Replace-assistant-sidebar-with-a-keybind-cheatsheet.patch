@@ -1,0 +1,492 @@
+From 89e559ff13cecc69fe8c12923c7b19c3e81f39a0 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 17:43:19 +0700
+Subject: [PATCH 3/5] Replace assistant sidebar with a keybind cheatsheet
+
+The assistant sidebar slot (opened with "ambxst run assistant") now
+shows CheatsheetSidebar: every active keybind, grouped (Essentials,
+Shell & apps, Windows, Workspaces, Screenshots & tools, Media &
+hardware), with a search box. Data comes from
+~/.config/hypr/scripts/keyhints --json. Keeps the sidebar's slide-in,
+pin, resize and close behaviour.
+---
+ modules/shell/UnifiedShellPanel.qml   |   2 +-
+ modules/sidebar/CheatsheetSidebar.qml | 453 ++++++++++++++++++++++++++
+ 2 files changed, 454 insertions(+), 1 deletion(-)
+ create mode 100644 modules/sidebar/CheatsheetSidebar.qml
+
+diff --git a/modules/shell/UnifiedShellPanel.qml b/modules/shell/UnifiedShellPanel.qml
+index 786c98e..ce91b2e 100644
+--- a/modules/shell/UnifiedShellPanel.qml
++++ b/modules/shell/UnifiedShellPanel.qml
+@@ -223,7 +223,7 @@ PanelWindow {
+             z: 4
+         }
+ 
+-        AssistantSidebar {
++        CheatsheetSidebar {
+             id: assistantSidebar
+             targetScreen: unifiedPanel.targetScreen
+             z: 1
+diff --git a/modules/sidebar/CheatsheetSidebar.qml b/modules/sidebar/CheatsheetSidebar.qml
+new file mode 100644
+index 0000000..15255f6
+--- /dev/null
++++ b/modules/sidebar/CheatsheetSidebar.qml
+@@ -0,0 +1,453 @@
++import QtQuick
++import QtQuick.Controls
++import QtQuick.Layouts
++import qs.modules.theme
++import qs.config
++import qs.modules.components
++import qs.modules.services
++import qs.modules.globals
++import Quickshell
++import Quickshell.Io
++
++// mumeyong: keybind cheatsheet shown in the assistant sidebar slot (SUPER+H).
++// Same panel behaviour as AssistantSidebar (slide-in, pin, resize, close);
++// the content is the grouped list from ~/.config/hypr/scripts/keyhints --json.
++Item {
++    id: root
++    anchors.fill: parent
++
++    required property var targetScreen
++
++    readonly property bool active: GlobalStates.assistantVisible && targetScreen.name === GlobalStates.assistantScreenName
++    property alias hitbox: sidebarContainer
++
++    readonly property bool frameEnabled: (Config.bar?.frameEnabled ?? false)
++    readonly property bool frameWrapped: frameEnabled && GlobalStates.assistantPinned
++    readonly property int sidebarMargin: frameWrapped ? 0 : 4
++    property bool wantsFocus: false
++
++    readonly property string scriptPath: Quickshell.env("HOME") + "/.config/hypr/scripts/keyhints"
++    property var allRows: []
++    property string loadError: ""
++    readonly property string keySep: "\u001f"
++
++    function focusSearchInput() {
++        searchInput.focusInput();
++    }
++
++    function reload() {
++        loader.running = true;
++    }
++
++    function applyFilter() {
++        const q = searchInput.text.trim().toLowerCase();
++        rowsModel.clear();
++        for (const r of root.allRows) {
++            // Essentials only repeats other rows; skip it while searching.
++            if (q !== "" && r.group === "Essentials")
++                continue;
++            const keys = r.keys.join(" + ");
++            if (q === "" || r.label.toLowerCase().includes(q) || keys.toLowerCase().includes(q) || r.group.toLowerCase().includes(q))
++                rowsModel.append({ group: r.group, keysText: r.keys.join(root.keySep), label: r.label });
++        }
++    }
++
++    Process {
++        id: loader
++        command: [root.scriptPath, "--json"]
++        stdout: StdioCollector {
++            id: loaderOut
++        }
++        onExited: code => {
++            if (code === 0 && loaderOut.text) {
++                try {
++                    root.allRows = JSON.parse(loaderOut.text);
++                    root.loadError = "";
++                } catch (e) {
++                    root.loadError = "Could not read the keybind list: " + e;
++                }
++            } else {
++                root.loadError = "Keybind list unavailable. Expected " + root.scriptPath;
++            }
++            root.applyFilter();
++        }
++    }
++
++    Connections {
++        target: GlobalStates
++        function onAssistantFocusRequested(wasAlreadyOpen) {
++            if (targetScreen.name === GlobalStates.assistantScreenName) {
++                Qt.callLater(() => {
++                    if (wasAlreadyOpen && root.active && root.wantsFocus) {
++                        // Pressing the shortcut again closes it.
++                        GlobalStates.hideAssistant();
++                    } else {
++                        root.wantsFocus = true;
++                        focusSearchInput();
++                    }
++                });
++            }
++        }
++    }
++
++    // The panel only receives keyboard focus a moment after it opens, so a
++    // focus request made immediately is lost; retry once the window is active.
++    Timer {
++        id: refocusTimer
++        interval: 150
++        onTriggered: if (root.active && root.wantsFocus) root.focusSearchInput()
++    }
++
++    Connections {
++        target: root.Window.window
++        function onActiveChanged() {
++            if (root.active && root.wantsFocus && root.Window.window.active)
++                root.focusSearchInput();
++        }
++    }
++
++    onActiveChanged: {
++        if (active) {
++            reload();
++            root.wantsFocus = true;
++            Qt.callLater(() => {
++                focusSearchInput();
++            });
++            refocusTimer.restart();
++        } else {
++            root.wantsFocus = false;
++            searchInput.clear();
++        }
++    }
++
++    MouseArea {
++        anchors.fill: parent
++        propagateComposedEvents: true
++        acceptedButtons: Qt.LeftButton | Qt.RightButton
++        onPressed: mouse => {
++            if (!root.wantsFocus)
++                root.wantsFocus = true;
++            mouse.accepted = false;
++        }
++    }
++
++    MouseArea {
++        id: resizeHandle
++        width: 8
++        height: sidebarContainer.height
++        y: sidebarContainer.y
++        visible: sidebarContainer.visible && root.active
++        cursorShape: Qt.SplitHCursor
++        preventStealing: true
++
++        x: {
++            if (GlobalStates.assistantPosition === "left")
++                return sidebarContainer.x + sidebarContainer.width;
++            return sidebarContainer.x - width;
++        }
++
++        property real pressMouseX: 0
++        property int pressWidth: 0
++
++        onPressed: {
++            let mapped = mapToItem(root, mouseX, 0);
++            pressMouseX = mapped.x;
++            pressWidth = GlobalStates.assistantWidth;
++        }
++
++        onMouseXChanged: {
++            if (!pressed)
++                return;
++            let mapped = mapToItem(root, mouseX, 0);
++            let delta;
++            if (GlobalStates.assistantPosition === "right")
++                delta = pressMouseX - mapped.x;
++            else
++                delta = mapped.x - pressMouseX;
++            GlobalStates.assistantWidth = Math.max(300, Math.min(800, pressWidth + delta));
++        }
++
++        onReleased: {
++            Config.ai.sidebarWidth = GlobalStates.assistantWidth;
++        }
++    }
++
++    Item {
++        id: sidebarContainer
++        width: GlobalStates.assistantWidth + root.sidebarMargin
++        height: parent.height
++
++        anchors.right: GlobalStates.assistantPosition !== "left" ? parent.right : undefined
++        anchors.left: GlobalStates.assistantPosition === "left" ? parent.left : undefined
++
++        anchors.rightMargin: GlobalStates.assistantPosition !== "left" ? (root.active ? 0 : -width) : 0
++        anchors.leftMargin: GlobalStates.assistantPosition === "left" ? (root.active ? 0 : -width) : 0
++
++        visible: root.active || slideAnimR.running || slideAnimL.running
++
++        Behavior on anchors.rightMargin {
++            NumberAnimation {
++                id: slideAnimR
++                duration: Config.animDuration
++                easing.type: Easing.OutCubic
++            }
++        }
++
++        Behavior on anchors.leftMargin {
++            NumberAnimation {
++                id: slideAnimL
++                duration: Config.animDuration
++                easing.type: Easing.OutCubic
++            }
++        }
++
++        StyledRect {
++            anchors.fill: parent
++            anchors.topMargin: root.sidebarMargin
++            anchors.bottomMargin: root.sidebarMargin
++            anchors.leftMargin: GlobalStates.assistantPosition === "left" ? root.sidebarMargin : 0
++            anchors.rightMargin: GlobalStates.assistantPosition === "right" ? root.sidebarMargin : 0
++            variant: root.frameWrapped ? "transparent" : "bg"
++
++            radius: root.frameWrapped ? 0 : (variantConfig.radius !== undefined ? variantConfig.radius : Styling.radius(0))
++
++            ColumnLayout {
++                anchors.fill: parent
++                spacing: 0
++
++                // Header: title, pin, close
++                Item {
++                    Layout.fillWidth: true
++                    Layout.preferredHeight: 40
++
++                    RowLayout {
++                        anchors.fill: parent
++                        anchors.leftMargin: 12
++                        anchors.rightMargin: 8
++                        spacing: 8
++
++                        Text {
++                            text: Icons.keyboard
++                            font.family: Icons.font
++                            font.pixelSize: 16
++                            color: Styling.srItem("overprimary")
++                        }
++
++                        Text {
++                            text: "Keybinds"
++                            font.family: Config.theme.font
++                            font.pixelSize: Styling.fontSize(0)
++                            font.weight: Font.Bold
++                            color: Colors.overSurface
++                        }
++
++                        Item {
++                            Layout.fillWidth: true
++                        }
++
++                        Button {
++                            Layout.preferredWidth: 32
++                            Layout.preferredHeight: 32
++                            flat: true
++                            padding: 0
++
++                            contentItem: Text {
++                                text: Icons.pin
++                                font.family: Icons.font
++                                font.pixelSize: 16
++                                color: GlobalStates.assistantPinned ? Styling.srItem("overprimary") : Colors.overSurface
++                                horizontalAlignment: Text.AlignHCenter
++                                verticalAlignment: Text.AlignVCenter
++                            }
++
++                            background: StyledRect {
++                                variant: parent.hovered ? "focus" : "common"
++                                radius: Styling.radius(4)
++                                opacity: parent.hovered ? 1 : 0
++
++                                Behavior on opacity {
++                                    NumberAnimation {
++                                        duration: Config.animDuration / 4
++                                    }
++                                }
++                            }
++
++                            onClicked: {
++                                GlobalStates.assistantPinned = !GlobalStates.assistantPinned;
++                                Config.ai.sidebarPinnedOnStartup = GlobalStates.assistantPinned;
++                            }
++                        }
++
++                        Button {
++                            Layout.preferredWidth: 32
++                            Layout.preferredHeight: 32
++                            flat: true
++                            padding: 0
++
++                            contentItem: Text {
++                                text: GlobalStates.assistantPosition === "right" ? Icons.caretRight : Icons.caretLeft
++                                font.family: Icons.font
++                                font.pixelSize: 16
++                                color: Colors.overSurface
++                                horizontalAlignment: Text.AlignHCenter
++                                verticalAlignment: Text.AlignVCenter
++                            }
++
++                            background: StyledRect {
++                                variant: parent.hovered ? "focus" : "common"
++                                radius: Styling.radius(4)
++                                opacity: parent.hovered ? 1 : 0
++
++                                Behavior on opacity {
++                                    NumberAnimation {
++                                        duration: Config.animDuration / 4
++                                    }
++                                }
++                            }
++
++                            onClicked: GlobalStates.hideAssistant()
++                        }
++                    }
++
++                    Rectangle {
++                        anchors.bottom: parent.bottom
++                        width: parent.width
++                        height: 1
++                        color: Colors.outline
++                        opacity: 0.15
++                    }
++                }
++
++                SearchInput {
++                    id: searchInput
++                    Layout.fillWidth: true
++                    Layout.margins: 8
++                    implicitHeight: 40
++                    placeholderText: "Search a key or action…"
++                    clearOnEscape: false
++                    onSearchTextChanged: root.applyFilter()
++                    onEscapePressed: {
++                        if (text !== "")
++                            clear();
++                        else
++                            GlobalStates.hideAssistant();
++                    }
++                    onDownPressed: list.flick(0, -800)
++                    onUpPressed: list.flick(0, 800)
++                }
++
++                Text {
++                    Layout.fillWidth: true
++                    Layout.margins: 12
++                    visible: root.loadError !== "" || (rowsModel.count === 0 && searchInput.text !== "")
++                    text: root.loadError !== "" ? root.loadError : "No keybind matches “" + searchInput.text + "”"
++                    wrapMode: Text.Wrap
++                    font.family: Config.theme.font
++                    font.pixelSize: Styling.fontSize(-1)
++                    color: Colors.overSurfaceVariant
++                }
++
++                ListView {
++                    id: list
++                    Layout.fillWidth: true
++                    Layout.fillHeight: true
++                    clip: true
++                    model: ListModel {
++                        id: rowsModel
++                    }
++                    boundsBehavior: Flickable.StopAtBounds
++                    ScrollBar.vertical: ScrollBar {
++                        policy: ScrollBar.AsNeeded
++                    }
++
++                    section.property: "group"
++                    section.criteria: ViewSection.FullString
++                    section.delegate: Item {
++                        required property string section
++                        width: ListView.view.width
++                        height: 36
++
++                        Text {
++                            anchors.left: parent.left
++                            anchors.leftMargin: 12
++                            anchors.bottom: parent.bottom
++                            anchors.bottomMargin: 6
++                            text: parent.section.toUpperCase()
++                            font.family: Config.theme.font
++                            font.pixelSize: Styling.fontSize(-2)
++                            font.weight: Font.Bold
++                            font.letterSpacing: 1
++                            color: Styling.srItem("overprimary")
++                        }
++                    }
++
++                    delegate: Item {
++                        id: rowItem
++                        required property string keysText
++                        required property string label
++                        width: ListView.view.width
++                        height: Math.max(chips.implicitHeight, labelText.implicitHeight) + 10
++
++                        RowLayout {
++                            anchors.fill: parent
++                            anchors.leftMargin: 12
++                            anchors.rightMargin: 12
++                            spacing: 10
++
++                            Flow {
++                                id: chips
++                                Layout.preferredWidth: Math.round(rowItem.width * 0.46)
++                                Layout.alignment: Qt.AlignVCenter
++                                spacing: 4
++
++                                Repeater {
++                                    model: rowItem.keysText.split(root.keySep)
++
++                                    StyledRect {
++                                        id: chip
++                                        required property string modelData
++                                        variant: "common"
++                                        radius: Styling.radius(-4)
++                                        implicitWidth: keyText.implicitWidth + 12
++                                        implicitHeight: 22
++
++                                        Text {
++                                            id: keyText
++                                            anchors.centerIn: parent
++                                            text: chip.modelData
++                                            font.family: Config.theme.font
++                                            font.pixelSize: Styling.fontSize(-2)
++                                            font.weight: Font.DemiBold
++                                            color: Colors.overSurface
++                                        }
++                                    }
++                                }
++                            }
++
++                            Text {
++                                id: labelText
++                                Layout.fillWidth: true
++                                Layout.alignment: Qt.AlignVCenter
++                                text: rowItem.label
++                                wrapMode: Text.Wrap
++                                font.family: Config.theme.font
++                                font.pixelSize: Styling.fontSize(-1)
++                                color: Colors.overSurfaceVariant
++                            }
++                        }
++                    }
++                }
++
++                Text {
++                    Layout.fillWidth: true
++                    Layout.margins: 10
++                    horizontalAlignment: Text.AlignHCenter
++                    text: "Type to filter · Esc to close · SUPER+H toggles"
++                    font.family: Config.theme.font
++                    font.pixelSize: Styling.fontSize(-3)
++                    color: Colors.outline
++                }
++            }
++        }
++    }
++}
+-- 
+2.47.3
+
