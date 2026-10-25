@@ -20,7 +20,7 @@ BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 PACKAGES=(git curl rsync inotify-tools jq stress-ng power-profiles-daemon lm-sensors libnotify-bin pkexec python3)
 
 # mumeyong shell = Ambxst (https://github.com/Axenide/Ambxst, AGPL-3.0) + the
-# rebrand patch in .github/ambxst/. Versions are pinned so the patch applies.
+# patch series in .config/ambxst-patches/. Versions are pinned so the patches apply.
 AMBXST_REPO="https://github.com/Axenide/Ambxst.git"
 AMBXST_VERSION="1.3.14"
 AXCTL_VERSION="v0.0.31"
@@ -155,7 +155,7 @@ install_shell() {
   sudo install -m 755 "$tmp/axctl" /usr/local/bin/axctl
   sudo install -m 755 "$(find "$tmp/matugen" -type f -name matugen | head -1)" /usr/local/bin/matugen
 
-  step "Fetching Ambxst $AMBXST_VERSION source and applying the mumeyong rebrand"
+  step "Fetching Ambxst $AMBXST_VERSION source and applying the mumeyong patches"
   if [ ! -d "$SHELL_SRC/.git" ]; then
     mkdir -p "$(dirname "$SHELL_SRC")"
     git clone -q "$AMBXST_REPO" "$SHELL_SRC"
@@ -167,7 +167,7 @@ install_shell() {
     git -C "$SHELL_SRC" checkout -q -b mumeyong "$AMBXST_VERSION"
     git -C "$SHELL_SRC" -c user.name="$(git config user.name || echo mumeyong)" \
       -c user.email="$(git config user.email || echo mumeyong@localhost)" \
-      am -q --committer-date-is-author-date "$HOME/.github/ambxst/mumeyong-rebrand.patch"
+      am -q --committer-date-is-author-date "$HOME"/.config/ambxst-patches/*.patch
   fi
   mkdir -p "$HOME/.local/share/ambxst"
   echo "$SHELL_SRC" > "$HOME/.local/share/ambxst/shell_repo"

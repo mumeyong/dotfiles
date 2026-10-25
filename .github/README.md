@@ -13,7 +13,7 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.config/ambxst/` | mumeyong shell settings: bar, notch, theme, dock, lock screen, keybinds (`binds.json`) |
 | `.cache/ambxst/wallpapers.json` | Which wallpaper and wallpaper folder the shell uses |
 | `Pictures/wallpapers/wallhaven-6olgox.jpg` | The current wallpaper. The color theme is generated from it. |
-| `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14, one commit per change: the name and logo, a smaller pin button, the SUPER+H keybind cheatsheet sidebar (replaces the AI assistant), and GTK theming fixes (dark variant, readable selections, see-through background) |
+| `.config/ambxst-patches/` | My changes on top of Ambxst 1.3.14, one patch per change: the name and logo, a smaller pin button, the SUPER+H keybind cheatsheet sidebar (replaces the AI assistant), GTK theming fixes, the notch equalizer and media card, the macOS-style volume/brightness OSD in the top-right corner, and small upstream fixes |
 | `.github/ambxst/axctl.toml.seed` | Starting compositor config, so the first login already has keybinds and theme |
 | `.local/share/sddm-themes/mumeyong/` | mumeyong SDDM login theme, styled after the lock screen (adapted from Ambxst's lock screen, AGPL-3.0). Bundles League Gothic, Inter (OFL) and Phosphor (MIT) fonts, because SDDM can't read `~/.local/share/fonts`. |
 | `.local/bin/sddm-wallpaper-sync`, `.config/systemd/user/sddm-wallpaper-sync.*` | Copies the current wallpaper, a blurred copy and the palette to the login screen whenever the wallpaper changes |
@@ -24,7 +24,7 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.dotfiles-ignore` | Files kept out of the repo on purpose |
 
 ### About the mumeyong shell
-- It is **Ambxst 1.3.14** plus `mumeyong-rebrand.patch`. The patch changes what's on screen: the name "mumeyong", my logo, a smaller pin button, the keybind cheatsheet in place of the AI assistant sidebar, and how GTK apps like Thunar are themed. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
+- It is **Ambxst 1.3.14** plus the patches in `.config/ambxst-patches/`. They change what's on screen: the name "mumeyong", my logo, a smaller pin button, the keybind cheatsheet in place of the AI assistant sidebar, how GTK apps like Thunar are themed, the notch's equalizer and media card, and the top-right volume/brightness OSD. The About entry still says *Based on Ambxst by Axenide*. Ambxst is AGPL-3.0, so that credit and the license files stay.
 - Source: `~/.local/src/ambxst`, branch `mumeyong`.
 - Programs: `/usr/local/bin/ambxst`, `axctl` and `matugen`. They are downloaded from GitHub releases and the versions are pinned in `install.sh`.
 - Hyprland reads the shell's generated file `~/.local/share/ambxst/hyprland.lua` last. **My own keybinds in `hyprland.lua` always win.** Any key I've already bound is skipped from the shell's list.
@@ -64,7 +64,7 @@ What the script does:
 5. Sets up the mumeyong shell:
    - enables `trixie-backports` and installs `quickshell` and the other shell packages
    - downloads `ambxst` (checksum-verified), `axctl` and `matugen` into `/usr/local/bin`
-   - clones Ambxst 1.3.14 into `~/.local/src/ambxst` and applies the rebrand patch on a `mumeyong` branch
+   - clones Ambxst 1.3.14 into `~/.local/src/ambxst` and applies the patches from `.config/ambxst-patches/` on a `mumeyong` branch
    - installs the fonts the shell needs (Phosphor icons, Nerd Font symbols, League Gothic) and the adw-gtk3 GTK theme, which the shell recolors to match the wallpaper
 6. Reloads Hyprland if it's running.
 
@@ -131,7 +131,8 @@ dotfiles add ~/Pictures/wallpapers/<new-wallpaper> ~/.cache/ambxst/wallpapers.js
 cd ~/.local/src/ambxst
 git fetch --tags origin
 git rebase --onto <new-version> 1.3.14 mumeyong     # fix conflicts if any
-git format-patch --binary --stdout <new-version>..mumeyong > ~/.github/ambxst/mumeyong-rebrand.patch
+rm ~/.config/ambxst-patches/*.patch
+git format-patch -o ~/.config/ambxst-patches <new-version>..mumeyong
 ```
 Then update the matching `ambxst` binary. Set `AMBXST_VERSION` in `install.sh`, download that release's `ambxst-linux-amd64`, and `sudo install` it to `/usr/local/bin/ambxst`. Finally run `ambxst reload` and commit.
 
