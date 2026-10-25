@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch Ambxst wallpaper state for SDDM sync
+
+[Path]
+PathChanged=%h/.cache/ambxst/wallpapers.json
+PathChanged=%h/.cache/ambxst/colors.json
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=mumeyong
+Description=mumeyong login screen, styled after the mumeyong (Ambxst) lockscreen
+Author=mumeyong
+License=AGPL-3.0-or-later
+Type=sddm-theme
+Version=1.0
+ConfigFile=theme.conf
+MainScript=Main.qml
+Theme-Id=mumeyong
+Theme-API=2.0
+QtVersion=6

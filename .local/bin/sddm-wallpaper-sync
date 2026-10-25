@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Mirror the current mumeyong shell wallpaper (and its matugen palette) to the
+# mumeyong SDDM theme through its user-writable theme.conf.user.
+# Setup (needs sudo once): bash ~/.github/sddm/install.sh
+set -euo pipefail
+
+STATE="$HOME/.cache/ambxst/wallpapers.json"
+COLORS="$HOME/.cache/ambxst/colors.json"
+THEME_JSON="$HOME/.config/ambxst/config/theme.json"
+BAR_JSON="$HOME/.config/ambxst/config/bar.json"
+DEST_DIR="/var/cache/sddm-wallpaper"
+THEME_DIR="${SDDM_THEME_DIR:-/usr/share/sddm/themes/mumeyong}"
+
+[[ -w $DEST_DIR && -w $THEME_DIR ]] || { echo "run the one-time setup first: bash ~/.github/sddm/install.sh" >&2; exit 1; }
+
+wall=$(jq -r '.currentWall // (.perScreenWallpapers // {} | to_entries[0].value) // empty' "$STATE")
+[[ -f $wall ]] || { echo "wallpaper not found: $wall" >&2; exit 1; }
+
+# Static frame of the wallpaper (first frame for videos and gifs)
+ext="${wall##*.}"; ext="${ext,,}"
+target="$DEST_DIR/current.png"
+tmp="$DEST_DIR/.incoming.png"
+case $ext in
+  mp4|webm|mkv|mov|avi|m4v)
+    ffmpeg -loglevel error -y -i "$wall" -frames:v 1 "$tmp" ;;
+  *)
+    magick "${wall}[0]" "$tmp" ;;
+esac
+chmod 644 "$tmp"
+mv -f -- "$tmp" "$target"
+find "$DEST_DIR" -maxdepth 1 -name 'current.*' ! -name current.png -delete
+
+# Pre-blurred copy for the lockscreen-style blur (MultiEffect blurMax 64 at 1.25x zoom)
+magick "$target" -resize '960x960^' -blur 0x14 -quality 90 "$DEST_DIR/.blur.jpg"
+chmod 644 "$DEST_DIR/.blur.jpg"
+mv -f "$DEST_DIR/.blur.jpg" "$DEST_DIR/blur.jpg"
+
+# Avatar (~ is not readable by the sddm user)
+if [[ -f $HOME/.face ]]; then
+  install -m 644 "$HOME/.face" "$DEST_DIR/face"
+fi
+
+c() { jq -r --arg k "$1" '.[$k] // empty' "$COLORS" 2>/dev/null; }
+
+roundness=$(jq -r '.roundness // 16' "$THEME_JSON" 2>/dev/null || echo 16)
+use12h=$(jq -r '.use12hFormat // false' "$BAR_JSON" 2>/dev/null || echo false)
+cat > "$THEME_DIR/theme.conf.user" <<CONF
+[General]
+Background="$target"
+BackgroundBlur="$DEST_DIR/blur.jpg"
+Face="$DEST_DIR/face"
+Roundness="$roundness"
+Use12h="$use12h"
+PrimaryFixed="$(c primaryFixed)"
+PrimaryFixedDim="$(c primaryFixedDim)"
+Bg="$(c background)"
+Surface="$(c surface)"
+OverBackground="$(c overBackground)"
+Error="$(c error)"
+OverError="$(c overError)"
+Shadow="$(c shadow)"
+CONF
+
+echo "SDDM background -> $wall"

@@ -15,6 +15,9 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `Pictures/wallpapers/wallhaven-6olgox.jpg` | The current wallpaper. The color theme is generated from it. |
 | `.github/ambxst/mumeyong-rebrand.patch` | My changes on top of Ambxst 1.3.14, one commit per change: the name and logo, a smaller pin button, the SUPER+H keybind cheatsheet sidebar (replaces the AI assistant), and GTK theming fixes (dark variant, readable selections, see-through background) |
 | `.github/ambxst/axctl.toml.seed` | Starting compositor config, so the first login already has keybinds and theme |
+| `.local/share/sddm-themes/mumeyong/` | mumeyong SDDM login theme, styled after the lock screen (adapted from Ambxst's lock screen, AGPL-3.0). Bundles League Gothic, Inter (OFL) and Phosphor (MIT) fonts, because SDDM can't read `~/.local/share/fonts`. |
+| `.local/bin/sddm-wallpaper-sync`, `.config/systemd/user/sddm-wallpaper-sync.*` | Copies the current wallpaper, a blurred copy and the palette to the login screen whenever the wallpaper changes |
+| `.github/sddm/install.sh` | One-time sudo setup for the login theme |
 | `.config/kitty/`, `.config/ghostty/` | Terminals |
 | `.config/cava/`, `.config/qt5ct/`, `.config/qt6ct/`, `.config/gtk-3.0/`, `.config/gtk-4.0/` | Other theming |
 | `.zshrc` | Shell, including the `dotfiles` alias |
@@ -68,11 +71,16 @@ What the script does:
 Then log out and log back in. The shell starts by itself.
 
 ### Optional: SDDM theme
-The login screen uses [sddm-astronaut-theme](https://github.com/Keyitdev/sddm-astronaut-theme). It's a system file, so it isn't in this repo:
+The login screen is **mumeyong**, my own SDDM theme. It looks like the shell's lock screen: blurred wallpaper, the big two-tone clock and the avatar + password pill, plus a small session/power pill. It follows the wallpaper automatically: whenever the shell's wallpaper or colors change, a user systemd unit copies the wallpaper, a blurred copy and the palette into the theme.
 ```bash
-git clone --depth=1 https://github.com/Keyitdev/sddm-astronaut-theme.git ~/sddm-astronaut-theme
-cd ~/sddm-astronaut-theme && sudo ./setup.sh
+bash ~/.github/sddm/install.sh
 ```
+The script needs sudo once. It installs the theme to `/usr/share/sddm/themes/mumeyong`, owned by you so later syncs need no sudo, and makes it the active theme in `/etc/sddm.conf`, keeping a `.bak` copy. It also enables `sddm-wallpaper-sync.path`. The theme has no on-screen keyboard, so the script also disables `/etc/sddm.conf.d/virtualkbd.conf` if it exists.
+
+- Run a sync by hand: `sddm-wallpaper-sync`. Log: `journalctl --user -u sddm-wallpaper-sync`
+- Preview without logging out: `sddm-greeter-qt6 --test-mode --theme /usr/share/sddm/themes/mumeyong` (it opens fullscreen; close it with `pkill sddm-greeter`)
+- After editing the theme in `~/.local/share/sddm-themes/mumeyong`, copy it over: `cp -r ~/.local/share/sddm-themes/mumeyong/. /usr/share/sddm/themes/mumeyong/`
+- Undo: `sudo mv /etc/sddm.conf.bak /etc/sddm.conf`
 
 ---
 
