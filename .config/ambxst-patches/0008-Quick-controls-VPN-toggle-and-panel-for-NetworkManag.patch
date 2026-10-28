@@ -1,0 +1,390 @@
+From 135816697419b4f696abd133813df7547ffd7a0a Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 10:44:05 +0700
+Subject: [PATCH 8/8] Quick controls: VPN toggle and panel for NetworkManager
+ profiles
+
+---
+ modules/services/VpnService.qml               | 122 +++++++++++++++
+ .../widgets/dashboard/controls/VpnPanel.qml   | 139 ++++++++++++++++++
+ .../dashboard/widgets/QuickControls.qml       |  43 +++++-
+ translations/en.json                          |   6 +
+ 4 files changed, 307 insertions(+), 3 deletions(-)
+ create mode 100644 modules/services/VpnService.qml
+ create mode 100644 modules/widgets/dashboard/controls/VpnPanel.qml
+
+diff --git a/modules/services/VpnService.qml b/modules/services/VpnService.qml
+new file mode 100644
+index 0000000..3754b8d
+--- /dev/null
++++ b/modules/services/VpnService.qml
+@@ -0,0 +1,122 @@
++pragma Singleton
++pragma ComponentBehavior: Bound
++
++import QtQuick
++import Quickshell
++import Quickshell.Io
++
++// NetworkManager VPN profiles (OpenVPN, WireGuard, ...) via nmcli.
++Singleton {
++    id: root
++
++    // [{ uuid, name, type, state }] — state: "" | "activating" | "activated" | "deactivating"
++    property list<var> connections: []
++    property string busyUuid: ""
++    property string lastError: ""
++    property string lastUsedUuid: ""
++
++    readonly property bool available: connections.length > 0
++    readonly property var activeConnection: connections.find(c => c.state === "activated") ?? null
++    readonly property bool connected: activeConnection !== null
++    readonly property bool busy: busyUuid !== "" || connections.some(c => c.state === "activating" || c.state === "deactivating")
++
++    function update(): void {
++        if (!listProc.running)
++            listProc.running = true;
++    }
++
++    function connectVpn(uuid: string): void {
++        run(uuid, ["nmcli", "connection", "up", "uuid", uuid]);
++        lastUsedUuid = uuid;
++    }
++
++    function disconnectVpn(uuid: string): void {
++        run(uuid, ["nmcli", "connection", "down", "uuid", uuid]);
++    }
++
++    function toggleVpn(uuid: string): void {
++        const conn = connections.find(c => c.uuid === uuid);
++        if (conn && conn.state === "activated")
++            disconnectVpn(uuid);
++        else
++            connectVpn(uuid);
++    }
++
++    // Quick toggle: disconnect the active VPN, or connect the last used / first one.
++    function toggle(): void {
++        if (activeConnection) {
++            disconnectVpn(activeConnection.uuid);
++            return;
++        }
++        const target = connections.find(c => c.uuid === lastUsedUuid) ?? connections[0];
++        if (target)
++            connectVpn(target.uuid);
++    }
++
++    function run(uuid: string, command: list<string>): void {
++        if (actionProc.running)
++            return;
++        busyUuid = uuid;
++        lastError = "";
++        actionProc.command = command;
++        actionProc.running = true;
++    }
++
++    function parse(text: string): void {
++        const result = [];
++        for (const line of text.split("\n")) {
++            // Terse output: UUID:TYPE:STATE:NAME — name last since it may contain escaped colons
++            const m = line.match(/^([^:]+):([^:]+):([^:]*):(.*)$/);
++            if (!m || (m[2] !== "vpn" && m[2] !== "wireguard"))
++                continue;
++            result.push({
++                uuid: m[1],
++                type: m[2],
++                state: m[3],
++                name: m[4].replace(/\\:/g, ":")
++            });
++        }
++        connections = result;
++        if (!lastUsedUuid && activeConnection)
++            lastUsedUuid = activeConnection.uuid;
++    }
++
++    Process {
++        id: listProc
++        command: ["nmcli", "-t", "-f", "UUID,TYPE,STATE,NAME", "connection", "show"]
++        stdout: StdioCollector {
++            onStreamFinished: root.parse(text)
++        }
++    }
++
++    Process {
++        id: actionProc
++        stderr: StdioCollector {
++            onStreamFinished: {
++                if (text.trim().length > 0)
++                    root.lastError = text.trim().split("\n").pop();
++            }
++        }
++        onExited: (exitCode, exitStatus) => {
++            root.busyUuid = "";
++            root.update();
++        }
++    }
++
++    // Re-list whenever NetworkManager reports a change
++    Process {
++        running: true
++        command: ["nmcli", "monitor"]
++        stdout: SplitParser {
++            onRead: _ => refreshDebouncer.restart()
++        }
++    }
++
++    Timer {
++        id: refreshDebouncer
++        interval: 300
++        onTriggered: root.update()
++    }
++
++    Component.onCompleted: update()
++}
+diff --git a/modules/widgets/dashboard/controls/VpnPanel.qml b/modules/widgets/dashboard/controls/VpnPanel.qml
+new file mode 100644
+index 0000000..4792350
+--- /dev/null
++++ b/modules/widgets/dashboard/controls/VpnPanel.qml
+@@ -0,0 +1,139 @@
++pragma ComponentBehavior: Bound
++
++import QtQuick
++import QtQuick.Controls
++import QtQuick.Layouts
++import Quickshell
++import qs.modules.theme
++import qs.modules.components
++import qs.modules.services
++import qs.config
++
++Item {
++    id: root
++
++    property int maxContentWidth: 480
++    readonly property int contentWidth: Math.min(width, maxContentWidth)
++
++    Component.onCompleted: VpnService.update()
++
++    ListView {
++        id: vpnList
++        anchors.fill: parent
++        clip: true
++        spacing: 4
++
++        model: VpnService.connections
++
++        header: Item {
++            width: vpnList.width
++            height: titlebar.height + 8
++
++            PanelTitlebar {
++                id: titlebar
++                width: root.contentWidth
++                anchors.horizontalCenter: parent.horizontalCenter
++                title: I18n.t("vpn.title")
++                statusText: VpnService.lastError !== "" ? I18n.t("vpn.failed") : (VpnService.busy ? I18n.t("vpn.working") : "")
++                statusColor: VpnService.lastError !== "" ? Colors.error : Styling.srItem("overprimary")
++                showToggle: VpnService.available
++                toggleChecked: VpnService.connected
++
++                actions: [
++                    {
++                        icon: Icons.popOpen,
++                        tooltip: I18n.t("wifi.network_settings"),
++                        onClicked: function () {
++                            Quickshell.execDetached(["nm-connection-editor"]);
++                        }
++                    }
++                ]
++
++                onToggleChanged: checked => {
++                    if (checked !== VpnService.connected)
++                        VpnService.toggle();
++                }
++            }
++        }
++
++        delegate: Item {
++            id: vpnItem
++            required property var modelData
++            readonly property bool active: modelData.state === "activated"
++            readonly property bool pending: VpnService.busyUuid === modelData.uuid || modelData.state === "activating" || modelData.state === "deactivating"
++
++            width: vpnList.width
++            height: 48
++
++            StyledRect {
++                width: root.contentWidth
++                height: parent.height
++                anchors.horizontalCenter: parent.horizontalCenter
++                variant: mouseArea.containsMouse ? "focus" : "common"
++                radius: Styling.radius(4)
++
++                MouseArea {
++                    id: mouseArea
++                    anchors.fill: parent
++                    hoverEnabled: true
++                    cursorShape: Qt.PointingHandCursor
++                    onClicked: VpnService.toggleVpn(vpnItem.modelData.uuid)
++                }
++
++                RowLayout {
++                    anchors.fill: parent
++                    anchors.leftMargin: 12
++                    anchors.rightMargin: 12
++                    spacing: 12
++
++                    Text {
++                        text: Icons.vpn
++                        font.family: Icons.font
++                        font.pixelSize: 20
++                        color: vpnItem.active ? Styling.srItem("overprimary") : Colors.overBackground
++                    }
++
++                    ColumnLayout {
++                        Layout.fillWidth: true
++                        spacing: 0
++
++                        Text {
++                            Layout.fillWidth: true
++                            text: vpnItem.modelData.name
++                            font.family: Config.theme.font
++                            font.pixelSize: Config.theme.fontSize
++                            font.weight: Font.Medium
++                            color: Colors.overBackground
++                            elide: Text.ElideRight
++                        }
++
++                        Text {
++                            Layout.fillWidth: true
++                            visible: vpnItem.active || vpnItem.pending
++                            text: vpnItem.pending ? I18n.t("vpn.working") : I18n.t("wifi.connected")
++                            font.family: Config.theme.font
++                            font.pixelSize: Styling.fontSize(-2)
++                            color: Colors.overSurfaceVariant
++                        }
++                    }
++
++                    Text {
++                        text: vpnItem.active ? I18n.t("wifi.disconnect") : I18n.t("wifi.connect")
++                        font.family: Config.theme.font
++                        font.pixelSize: Styling.fontSize(-1)
++                        color: vpnItem.active ? Colors.overSurfaceVariant : Styling.srItem("overprimary")
++                    }
++                }
++            }
++        }
++
++        Text {
++            anchors.centerIn: parent
++            visible: vpnList.count === 0
++            text: I18n.t("vpn.none")
++            font.family: Config.theme.font
++            font.pixelSize: Config.theme.fontSize
++            color: Colors.overSurfaceVariant
++        }
++    }
++}
+diff --git a/modules/widgets/dashboard/widgets/QuickControls.qml b/modules/widgets/dashboard/widgets/QuickControls.qml
+index daf05a9..e8b2887 100644
+--- a/modules/widgets/dashboard/widgets/QuickControls.qml
++++ b/modules/widgets/dashboard/widgets/QuickControls.qml
+@@ -14,7 +14,7 @@ StyledRect {
+     implicitHeight: columnLayout.implicitHeight + 8
+     radius: Styling.radius(4)
+     
+-    property int expandedPanel: -1 // -1: none, 0: wifi, 1: bluetooth
++    property int expandedPanel: -1 // -1: none, 0: wifi, 1: bluetooth, 2: vpn
+     
+     onVisibleChanged: {
+         if (!visible) {
+@@ -98,6 +98,17 @@ StyledRect {
+                     onLongPressed: root.togglePanel(1)
+                 }
+ 
++                ControlButton {
++                    Layout.preferredWidth: 48
++                    Layout.preferredHeight: 48
++                    iconName: Icons.vpn
++                    isActive: VpnService.connected || root.expandedPanel === 2
++                    tooltipText: VpnService.connected ? I18n.t("vpn.tooltip_on", VpnService.activeConnection.name) : I18n.t("vpn.tooltip_off")
++                    onClicked: VpnService.available ? VpnService.toggle() : root.togglePanel(2)
++                    onRightClicked: root.togglePanel(2)
++                    onLongPressed: root.togglePanel(2)
++                }
++
+                 ControlButton {
+                     Layout.preferredWidth: 48
+                     Layout.preferredHeight: 48
+@@ -164,7 +175,7 @@ StyledRect {
+                         asynchronous: true
+                         
+                         opacity: root.expandedPanel === 0 ? 1 : 0
+-                        x: root.expandedPanel === 0 ? 0 : (root.expandedPanel === 1 ? -width : width)
++                        x: root.panelOffset(0, width)
+                         
+                         onLoaded: {
+                             if (item) {
+@@ -184,7 +195,26 @@ StyledRect {
+                         asynchronous: true
+                         
+                         opacity: root.expandedPanel === 1 ? 1 : 0
+-                        x: root.expandedPanel === 1 ? 0 : (root.expandedPanel === 0 ? width : -width)
++                        x: root.panelOffset(1, width)
++                        
++                        onLoaded: {
++                            if (item) {
++                                item.maxContentWidth = width;
++                            }
++                        }
++
++                        Behavior on opacity { enabled: Config.animDuration > 0; NumberAnimation { duration: Config.animDuration; easing.type: Easing.OutQuart } }
++                        Behavior on x { enabled: Config.animDuration > 0; NumberAnimation { duration: Config.animDuration; easing.type: Easing.OutQuart } }
++                    }
++                    Loader {
++                        id: vpnLoader
++                        anchors.fill: parent
++                        active: root.expandedPanel === 2
++                        source: "../controls/VpnPanel.qml"
++                        asynchronous: true
++                        
++                        opacity: root.expandedPanel === 2 ? 1 : 0
++                        x: root.panelOffset(2, width)
+                         
+                         onLoaded: {
+                             if (item) {
+@@ -200,6 +230,13 @@ StyledRect {
+         }
+     }
+     
++    // Slide panels left of the open one out to the left, the rest out to the right
++    function panelOffset(index, width) {
++        if (root.expandedPanel === index)
++            return 0;
++        return index < root.expandedPanel ? -width : width;
++    }
++
+     function togglePanel(index) {
+         if (root.expandedPanel === index) {
+             root.expandedPanel = -1;
+diff --git a/translations/en.json b/translations/en.json
+index 96b1e50..e0d6b3e 100644
+--- a/translations/en.json
++++ b/translations/en.json
+@@ -929,6 +929,12 @@
+   "tools.screenshot_directory": "Open Screenshots",
+   "tools.toggle_audio": "Toggle Audio Output",
+   "tools.toggle_mic": "Toggle Microphone",
++  "vpn.failed": "Failed",
++  "vpn.none": "No VPN connections. Add one in network settings.",
++  "vpn.title": "VPN",
++  "vpn.tooltip_off": "VPN: Off",
++  "vpn.tooltip_on": "VPN: %1",
++  "vpn.working": "Working...",
+   "wallpapers.current": "CURRENT",
+   "wallpapers.edit_gradia": "Edit with Gradia",
+   "wallpapers.filter_gif": "GIF",
+-- 
+2.47.3
+

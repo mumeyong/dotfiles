@@ -1,7 +1,7 @@
 From 7e390b37f5eb83371378f24fc81329d80ab2558a Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 24 Oct 2026 17:43:19 +0700
-Subject: [PATCH 3/7] GTK theme: dark variant, readable selections, see-through
+Subject: [PATCH 3/8] GTK theme: dark variant, readable selections, see-through
  background
 
 - Use adw-gtk3-dark when the generated colors are dark, so widgets the

@@ -1,7 +1,7 @@
 From bd86cccd3696b09c8dabee45e1b56f39a5b79bbe Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 00:28:19 +0700
-Subject: [PATCH 6/7] OSD: macOS-style card in the top-right corner instead of
+Subject: [PATCH 6/8] OSD: macOS-style card in the top-right corner instead of
  the notch
 
 Move the volume, mic and brightness indicator out of the dynamic island
