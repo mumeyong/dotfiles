@@ -1,7 +1,7 @@
 From 1bd9b73ce9f1b711c082b226633e4939be6b3cc4 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 24 Oct 2026 16:33:18 +0700
-Subject: [PATCH 1/8] Rebrand UI as mumeyong
+Subject: [PATCH 1/7] Rebrand UI as mumeyong
 
 Replace user-visible "Ambxst" text (settings title, notch label,
 notifications, keybind labels, mods dialogs, translations) and the logo

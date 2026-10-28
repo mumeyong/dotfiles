@@ -1,7 +1,7 @@
-From 1c93cba3f16a18494614df0b7037b82e77f4aea8 Mon Sep 17 00:00:00 2001
+From c66c8b318c9b10d955e2981fd5fc093f263d9668 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sun, 25 Oct 2026 19:07:25 +0700
-Subject: [PATCH 5/8] Notch: cava equalizer and hover media card
+Subject: [PATCH 4/7] Notch: cava equalizer and hover media card
 
 The compact player shows the artwork, the track and live cava bars tinted
 from the album art. Hover expansion now opens a media card under the main

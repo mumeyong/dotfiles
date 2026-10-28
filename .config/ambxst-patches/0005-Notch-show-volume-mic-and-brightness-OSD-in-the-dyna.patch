@@ -1,7 +1,7 @@
-From a87ec933db68d258f4b04ce1a8c324d3f0b80af0 Mon Sep 17 00:00:00 2001
+From 3078c990f33cfcc030554735fd9c91123d5caae1 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sun, 25 Oct 2026 19:30:01 +0700
-Subject: [PATCH 6/8] Notch: show volume, mic and brightness OSD in the dynamic
+Subject: [PATCH 5/7] Notch: show volume, mic and brightness OSD in the dynamic
  island
 
 Replace the bottom OSD popup with an indicator that takes over the compact
