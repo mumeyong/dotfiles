@@ -26,15 +26,15 @@
         "onResume": "ambxst screen on"
       },
       {
-        "timeout": 600,
+        "timeout": 1800,
         "onTimeout": "axctl brightness set 0.1"
       },
       {
-        "timeout": 900,
+        "timeout": 2100,
         "onTimeout": "loginctl lock-session"
       },
       {
-        "timeout": 930,
+        "timeout": 2130,
         "onTimeout": "ambxst screen off",
         "onResume": "ambxst screen on"
       },
@@ -43,7 +43,7 @@
         "onTimeout": "$HOME/.config/hypr/scripts/idle-when bat ambxst suspend"
       },
       {
-        "timeout": 3600,
+        "timeout": 4800,
         "onTimeout": "ambxst suspend"
       }
     ]

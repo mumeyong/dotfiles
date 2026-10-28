@@ -45,3 +45,4 @@ export TERM=xterm-256color
 # Dotfiles (bare repo): use `dotfiles` like `git`, e.g. `dotfiles status`, `dotfiles add -u`, `dotfiles push`
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 export PATH=~/.local/opt/node22/bin:$PATH
+alias airpods-reset='pactl set-card-profile bluez_card.EC_73_79_12_8E_EB off && sleep 1 && pactl set-card-profile bluez_card.EC_73_79_12_8E_EB a2dp-sink'
