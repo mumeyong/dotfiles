@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Build ~/.themes/Fleon-Kitty: the Fleon GTK theme recolored with kitty's
+current (Ambxst-generated) palette and a translucent background."""
+import os, re, shutil, subprocess, sys
+
+HOME = os.path.expanduser("~")
+SRC = os.path.join(HOME, ".themes/Fleon")
+DST = os.path.join(HOME, ".themes/Fleon-Kitty")
+COLORS = [os.path.join(HOME, ".cache/ambxst/kitty.conf"),
+          os.path.join(HOME, ".config/kitty/kitty-themes/01-Wallust.conf")]
+OPACITY = float(os.environ.get("THUNAR_OPACITY", "0.85"))
+
+
+def load_colors():
+    for path in COLORS:
+        if os.path.exists(path):
+            c = {}
+            for line in open(path):
+                m = re.match(r"\s*(\w+)\s+(#[0-9a-fA-F]{6})\b", line)
+                if m:
+                    c[m.group(1)] = m.group(2)
+            if "background" in c and "foreground" in c:
+                return path, c
+    sys.exit("thunar-kitty-theme: no kitty colors found")
+
+
+def rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgba(h, a):
+    return "rgba(%d, %d, %d, %s)" % (*rgb(h), a)
+
+
+def main():
+    src_path, c = load_colors()
+    bg, fg = c["background"], c["foreground"]
+    alt = c.get("color0", bg)
+    muted = c.get("color8", alt)
+    accent = c.get("url_color", c.get("color4", fg))
+    hover = c.get("color5", accent)
+    sel_bg = c.get("selection_background", accent)
+    sel_fg = c.get("selection_foreground", bg)
+    fr, fg_g, fb = rgb(fg)
+
+    swaps = [
+        (r"#373E4D", rgba(bg, OPACITY)),
+        (r"#3B4252", rgba(alt, OPACITY)),
+        (r"#56687E", muted),
+        (r"#63C5EA", accent),
+        (r"#CF8EF4", hover),
+        (r"#F9F9F9", fg),
+        (r"rgba\(248, 248, 242,", "rgba(%d, %d, %d," % (fr, fg_g, fb)),
+        (r"@define-color theme_selected_fg_color white;",
+         "@define-color theme_selected_fg_color %s;" % sel_fg),
+    ]
+
+    if os.path.isdir(DST):
+        shutil.rmtree(DST)
+    shutil.copytree(SRC, DST, symlinks=True)
+    for name in ("gtk.css", "custom.css"):
+        p = os.path.join(DST, "gtk-3.0", name)
+        css = open(p).read()
+        for pat, rep in swaps:
+            css = re.sub(pat, rep, css, flags=re.I)
+        open(p, "w").write(css)
+
+    # Side-pane katana art: drop Fleon's slate wash, keep the swords tinted
+    # with kitty's foreground.
+    art = os.path.join(DST, "gtk-assets", "thunar-sidebar.png")
+    if shutil.which("magick"):
+        subprocess.run(["magick", os.path.join(SRC, "gtk-assets", "thunar-sidebar.png"),
+                        "-fuzz", "6%", "-fill", "none",
+                        "-opaque", "srgba(76,86,106,0.501961)",
+                        "-fill", fg, "-colorize", "100",
+                        "-channel", "A", "-evaluate", "multiply", "0.35",
+                        "+channel", art], check=False)
+
+    # Only the window paints the translucent background; inner panes stay
+    # clear so the alpha doesn't stack up.
+    extra = """
+/* Fleon-Kitty: generated from %(src)s */
+window.thunar { background-color: %(win)s; }
+.thunar .view, .thunar treeview, .thunar scrolledwindow, .thunar viewport,
+.thunar .standard-view, .thunar paned, .thunar notebook, .thunar notebook stack,
+.thunar notebook header, .thunar #location-toolbar, .thunar toolbar,
+.thunar statusbar, .thunar .sidebar, .thunar .sidebar .view {
+  background-color: transparent;
+}
+.thunar .sidebar { background-color: %(side)s; }
+.thunar .view:selected, .thunar .view:selected:focus,
+.thunar iconview:selected, .thunar .sidebar .view:selected {
+  background-color: %(sel_bg)s;
+  color: %(sel_fg)s;
+}
+.thunar .view:hover:not(:selected) { background-color: %(hov)s; }
+.thunar entry { background-color: %(entry)s; color: %(fg)s; }
+""" % dict(src=src_path, win=rgba(bg, OPACITY), side=rgba(alt, 0.35),
+           sel_bg=sel_bg, sel_fg=sel_fg, hov=rgba(fg, 0.06),
+           entry=rgba(alt, 0.6), fg=fg)
+    with open(os.path.join(DST, "gtk-3.0", "custom.css"), "a") as f:
+        f.write(extra)
+    with open(os.path.join(DST, "index.theme"), "w") as f:
+        f.write("[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Fleon-Kitty\n"
+                "[X-GNOME-Metatheme]\nGtkTheme=Fleon-Kitty\n")
+
+
+if __name__ == "__main__":
+    main()

@@ -4,7 +4,7 @@
 -- Ambxst settings: SUPER+SHIFT+C, or ~/.config/ambxst/
 
 local terminal = "kitty"
-local file_manager = "thunar"
+local file_manager = os.getenv("HOME") .. "/.local/bin/thunar"
 local ambxst = "ambxst "
 
 ----------------------------------------------------------------------

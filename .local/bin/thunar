@@ -1,0 +1,9 @@
+#!/bin/sh
+# Launch Thunar with Fleon recolored to kitty's palette (owl4ce/dotfiles ng look)
+theme="$HOME/.themes/Fleon-Kitty/gtk-3.0/custom.css"
+colors="$HOME/.cache/ambxst/kitty.conf"
+if [ ! -f "$theme" ] || [ "$colors" -nt "$theme" ]; then
+  "$HOME/.local/bin/thunar-kitty-theme"
+fi
+export GTK_THEME=Fleon-Kitty
+exec /usr/bin/thunar "$@"

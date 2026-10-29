@@ -19,6 +19,8 @@ The repo is a **bare git repo**. Files are tracked where they live in `$HOME`, s
 | `.local/bin/sddm-wallpaper-sync`, `.config/systemd/user/sddm-wallpaper-sync.*` | Copies the current wallpaper, a blurred copy and the palette to the login screen whenever the wallpaper changes |
 | `.github/sddm/install.sh` | One-time sudo setup for the login theme |
 | `.config/kitty/`, `.config/ghostty/` | Terminals |
+| `.local/bin/thunar`, `.local/bin/thunar-kitty-theme`, `.themes/Fleon/` | Thunar in the [owl4ce/dotfiles](https://github.com/owl4ce/dotfiles/tree/ng) Fleon look, recolored to kitty's current palette with a see-through background. The wrapper rebuilds `~/.themes/Fleon-Kitty` whenever the colors change. Fleon is GPL-3.0. |
+| `.config/systemd/user/thunar.service.d/`, `.local/share/applications/thunar*.desktop`, `.config/xfce4/xfconf/xfce-perchannel-xml/thunar.xml` | Make every way of opening Thunar use that theme, plus owl4ce's Thunar settings |
 | `.config/cava/`, `.config/qt5ct/`, `.config/qt6ct/`, `.config/gtk-3.0/`, `.config/gtk-4.0/` | Other theming |
 | `.zshrc` | Shell, including the `dotfiles` alias |
 | `.dotfiles-ignore` | Files kept out of the repo on purpose |
