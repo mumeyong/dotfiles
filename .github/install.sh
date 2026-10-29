@@ -7,6 +7,7 @@
 # Options:
 #   --hyprland      Run the Debian-Hyprland installer before restoring dotfiles
 #   --no-packages   Skip apt packages
+#   --no-apps       Skip desktop apps, fonts, icons, cursor and oh-my-zsh
 #   --no-shell      Skip the mumeyong shell (Ambxst) setup
 #   --https         Clone over HTTPS instead of SSH (asks for GitHub username + token)
 #   -h, --help      Show this help
@@ -18,6 +19,15 @@ UPSTREAM_INSTALLER="https://github.com/LinuxBeginnings/Debian-Hyprland.git"
 DOTDIR="$HOME/.dotfiles"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 PACKAGES=(git curl rsync inotify-tools jq stress-ng power-profiles-daemon lm-sensors libnotify-bin pkexec python3)
+
+# Desktop apps the dotfiles configure. Debian-Hyprland installs most of these too,
+# but listing them here makes a plain `install.sh` (no --hyprland) complete.
+APP_PACKAGES=(zsh kitty starship fastfetch lsd cava qt5ct qt6ct nwg-look
+  thunar thunar-archive-plugin thunar-volman tumbler ffmpegthumbnailer xfconf gvfs-backends
+  imagemagick xdg-user-dirs grim slurp swappy pipewire-bin wireplumber fonts-inter)
+BIBATA_VERSION="v2.0.7"          # cursor: Bibata-Modern-Ice
+FLAT_REMIX_VERSION="20251119"    # icons: Flat-Remix-Blue-Dark/Light
+OMZ_THEME_URL="https://raw.githubusercontent.com/LinuxBeginnings/Debian-Hyprland/main/assets/add_zsh_theme/agnosterzak.zsh-theme"
 
 # mumeyong shell = Ambxst (https://github.com/Axenide/Ambxst, AGPL-3.0) + the
 # patch series in .config/ambxst-patches/. Versions are pinned so the patches apply.
@@ -41,6 +51,7 @@ SHELL_PACKAGES=(fuzzel tmux zenity wlsunset sqlite3 tesseract-ocr tesseract-ocr-
 
 with_hyprland=0
 with_packages=1
+with_apps=1
 with_shell=1
 repo="${DOTFILES_REPO:-$REPO_SSH}"   # DOTFILES_REPO overrides (e.g. for testing)
 
@@ -48,6 +59,7 @@ for arg in "$@"; do
   case "$arg" in
     --hyprland) with_hyprland=1 ;;
     --no-packages) with_packages=0 ;;
+    --no-apps) with_apps=0 ;;
     --no-shell) with_shell=0 ;;
     --https) repo="$REPO_HTTPS" ;;
     -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -124,8 +136,69 @@ step "Restoring dotfiles into $HOME"
 dot checkout -f -B main origin/main
 dot branch -q --set-upstream-to=origin/main main
 
-# 5. mumeyong shell (Ambxst + rebrand) ----------------------------------------
 fetch() { curl -fsSL --retry 3 -o "$2" "$1"; }
+
+# 5. Desktop apps, fonts, icons, cursor, zsh ----------------------------------
+install_apps() {
+  local tmp; tmp="$(mktemp -d)"
+
+  if [ "$with_packages" -eq 1 ]; then
+    step "Installing desktop apps: ${APP_PACKAGES[*]}"
+    sudo apt-get install -y "${APP_PACKAGES[@]}"
+  fi
+
+  step "Setting up zsh (oh-my-zsh, plugins, agnosterzak theme)"
+  local omz="$HOME/.oh-my-zsh"
+  # Clone instead of running the oh-my-zsh installer, which would replace ~/.zshrc.
+  [ -d "$omz" ] || git clone -q --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$omz"
+  [ -d "$omz/custom/plugins/zsh-autosuggestions" ] ||
+    git clone -q --depth=1 https://github.com/zsh-users/zsh-autosuggestions "$omz/custom/plugins/zsh-autosuggestions"
+  [ -d "$omz/custom/plugins/zsh-syntax-highlighting" ] ||
+    git clone -q --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting "$omz/custom/plugins/zsh-syntax-highlighting"
+  [ -f "$omz/themes/agnosterzak.zsh-theme" ] || fetch "$OMZ_THEME_URL" "$omz/themes/agnosterzak.zsh-theme"
+  if [ "$(getent passwd "$USER" | cut -d: -f7)" != "$(command -v zsh)" ]; then
+    sudo chsh -s "$(command -v zsh)" "$USER" || warn "Could not make zsh the login shell"
+  fi
+
+  step "Installing FantasqueSansM Nerd Font (kitty)"
+  local fonts="$HOME/.local/share/fonts"
+  if ! fc-list | grep -q "FantasqueSansM Nerd Font"; then
+    mkdir -p "$fonts/FantasqueSansMono"
+    fetch "https://github.com/ryanoasis/nerd-fonts/releases/download/$NERDFONTS_VERSION/FantasqueSansMono.tar.xz" "$tmp/fantasque.tar.xz"
+    tar -xJf "$tmp/fantasque.tar.xz" -C "$fonts/FantasqueSansMono"
+    fc-cache -f "$fonts" >/dev/null
+  fi
+
+  step "Installing Bibata-Modern-Ice cursor and Flat-Remix-Blue icons"
+  mkdir -p "$HOME/.icons"
+  if [ ! -d "$HOME/.icons/Bibata-Modern-Ice" ]; then
+    fetch "https://github.com/ful1e5/Bibata_Cursor/releases/download/$BIBATA_VERSION/Bibata-Modern-Ice.tar.xz" "$tmp/bibata.tar.xz"
+    tar -xJf "$tmp/bibata.tar.xz" -C "$HOME/.icons"
+  fi
+  if [ ! -d "$HOME/.icons/Flat-Remix-Blue-Dark" ]; then
+    # The repo is huge; fetch only the two Blue themes.
+    git clone -q --depth=1 --branch "$FLAT_REMIX_VERSION" --filter=blob:none --sparse \
+      https://github.com/daniruiz/flat-remix.git "$tmp/flat-remix" 2>/dev/null
+    git -C "$tmp/flat-remix" sparse-checkout set Flat-Remix-Blue-Dark Flat-Remix-Blue-Light
+    cp -a "$tmp/flat-remix/Flat-Remix-Blue-Dark" "$tmp/flat-remix/Flat-Remix-Blue-Light" "$HOME/.icons/"
+  fi
+  gsettings set org.gnome.desktop.interface icon-theme Flat-Remix-Blue-Dark 2>/dev/null || true
+  gsettings set org.gnome.desktop.interface cursor-theme Bibata-Modern-Ice 2>/dev/null || true
+
+  step "Thunar: default file manager, XDG folders, kitty-colored theme"
+  xdg-user-dirs-update || true
+  xdg-mime default thunar.desktop inode/directory || true
+  "$HOME/.local/bin/thunar-kitty-theme" || warn "Could not build the Fleon-Kitty theme (it is retried when Thunar starts)"
+  systemctl --user daemon-reload 2>/dev/null || true
+
+  rm -rf "$tmp"
+}
+
+if [ "$with_apps" -eq 1 ]; then
+  install_apps
+fi
+
+# 6. mumeyong shell (Ambxst + rebrand) ----------------------------------------
 
 install_shell() {
   local tmp; tmp="$(mktemp -d)"
@@ -200,7 +273,7 @@ if [ "$with_shell" -eq 1 ]; then
   install_shell
 fi
 
-# 6. Finish -------------------------------------------------------------------
+# 7. Finish -------------------------------------------------------------------
 step "Final touches"
 if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
   hyprctl reload >/dev/null 2>&1 && echo "Reloaded running Hyprland."

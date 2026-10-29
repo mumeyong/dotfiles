@@ -56,6 +56,7 @@ bash /tmp/dotfiles-bootstrap/.github/install.sh --hyprland
 | Hyprland 0.56+ already installed | `install.sh` |
 | No SSH key, use a token | add `--https` |
 | Skip apt packages | add `--no-packages` |
+| Skip apps, fonts, icons, cursor, zsh | add `--no-apps` |
 | Dotfiles only, no shell | add `--no-shell` |
 
 What the script does:
@@ -63,14 +64,55 @@ What the script does:
 2. With `--hyprland`: clones Debian-Hyprland and runs its **interactive** installer. Hyprland must be **0.56 or newer** for the Lua config. You don't need the KoolDots dotfiles it offers.
 3. Clones this repo as a bare repo into `~/.dotfiles`.
 4. **Backs up** every file it's about to overwrite to `~/.dotfiles-backup-<date>/`, then checks out my dotfiles.
-5. Sets up the mumeyong shell:
+5. Installs the desktop apps, fonts, icons, cursor and zsh setup listed in [What a fresh Debian needs](#what-a-fresh-debian-needs), makes Thunar the default file manager and builds its kitty-colored theme.
+6. Sets up the mumeyong shell:
    - enables `trixie-backports` and installs `quickshell` and the other shell packages
    - downloads `ambxst` (checksum-verified), `axctl` and `matugen` into `/usr/local/bin`
    - clones Ambxst 1.3.14 into `~/.local/src/ambxst` and applies the patches from `.config/ambxst-patches/` on a `mumeyong` branch
    - installs the fonts the shell needs (Phosphor icons, Nerd Font symbols, League Gothic) and the adw-gtk3 GTK theme, which the shell recolors to match the wallpaper
-6. Reloads Hyprland if it's running.
+7. Reloads Hyprland if it's running.
 
 Then log out and log back in. The shell starts by itself.
+
+### What a fresh Debian needs
+
+Everything below is installed by `install.sh` unless it's under **Install by hand**. The versions of downloaded items are pinned at the top of the script.
+
+**apt packages**
+
+| For | Packages |
+|---|---|
+| Hyprland | Built by [Debian-Hyprland](https://github.com/LinuxBeginnings/Debian-Hyprland) (`--hyprland`). Needs **0.56+** for the Lua config. |
+| Script helpers | `git curl rsync inotify-tools jq stress-ng power-profiles-daemon lm-sensors libnotify-bin pkexec python3` |
+| Terminal and shell | `kitty zsh starship fastfetch lsd` |
+| File manager | `thunar thunar-archive-plugin thunar-volman tumbler ffmpegthumbnailer xfconf gvfs-backends xdg-user-dirs`, plus `imagemagick` (recolors the side-pane art) |
+| Screenshots and audio | `grim slurp swappy pipewire-bin wireplumber` |
+| Theming | `cava qt5ct qt6ct nwg-look fonts-inter` |
+| mumeyong shell | `quickshell tmux` from **trixie-backports**, plus the `SHELL_PACKAGES` list in `install.sh` (Qt/QML modules, GStreamer, `fuzzel`, `brightnessctl`, `playerctl`, `wl-clipboard`, NetworkManager, BlueZ, Noto/Roboto fonts and more) |
+
+**Downloaded from GitHub**
+
+| What | Goes to | Used by |
+|---|---|---|
+| `ambxst`, `axctl`, `matugen` | `/usr/local/bin` | The shell and its wallpaper colors |
+| Ambxst 1.3.14 source + my patches | `~/.local/src/ambxst` | The shell |
+| Phosphor, Nerd Font symbols, League Gothic | `~/.local/share/fonts` | Shell icons and clock |
+| FantasqueSansM Nerd Font | `~/.local/share/fonts` | kitty |
+| adw-gtk3 | `~/.local/share/themes` | GTK apps, recolored by the shell |
+| Bibata-Modern-Ice | `~/.icons` | Cursor |
+| Flat-Remix-Blue-Dark/Light | `~/.icons` | Icon theme |
+| oh-my-zsh, zsh-autosuggestions, zsh-syntax-highlighting, agnosterzak theme | `~/.oh-my-zsh` | `.zshrc` |
+
+The Fleon Thunar theme is in this repo (`.themes/Fleon/`). `Fleon-Kitty` is built from it on the machine.
+
+**Install by hand (optional)**
+
+| What | Why it's not automatic |
+|---|---|
+| [MonoLisa](https://www.monolisa.dev/) Nerd Font, into `~/.local/share/fonts/MonoLisa` | Paid font, can't be downloaded. The shell's mono text falls back to another font without it. |
+| [YouTube Music](https://github.com/th-ch/youtube-music/releases) `.deb` | SUPER+M opens it. Not in Debian. |
+| [Neovim](https://github.com/neovim/neovim/releases), unpacked to `/opt/nvim-linux-x86_64` | `.zshrc` adds it to `PATH`. Debian's version is too old. |
+| [Ghostty](https://ghostty.org/) | Its config is tracked, but kitty is the terminal I actually use. |
 
 ### Optional: SDDM theme
 The login screen is **mumeyong**, my own SDDM theme. It looks like the shell's lock screen: blurred wallpaper, the big two-tone clock and the avatar + password pill, plus a small session/power pill. It follows the wallpaper automatically: whenever the shell's wallpaper or colors change, a user systemd unit copies the wallpaper, a blurred copy and the palette into the theme.
