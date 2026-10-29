@@ -1,7 +1,7 @@
 From 038e9742562fa07f081365d12322afa6ce765720 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 00:29:07 +0700
-Subject: [PATCH 7/8] CompactPlayer: import GlobalStates, fix artwork overlay
+Subject: [PATCH 7/9] CompactPlayer: import GlobalStates, fix artwork overlay
  radius
 
 wallpaperPath referenced GlobalStates without importing qs.modules.globals,

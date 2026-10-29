@@ -1,0 +1,212 @@
+From 2f3c6e879cb43b7642bcf3d72ca0aac101f7c978 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 16:54:15 +0700
+Subject: [PATCH 9/9] Clipboard: stop hover auto-scroll, open at newest item,
+ show all options
+
+Hovering an item no longer scrolls the list. Scrolling on hover slid a
+new item under the cursor, which selected it and scrolled again, so the
+list ran away from the history being browsed. Arrow keys still scroll.
+
+Opening the clipboard now resets to the top and selects the first item
+instead of restoring the previous scroll position and selection.
+
+The right-click options list shows every option instead of capping at
+three rows behind a scrollbar; image items get room for their Open row.
+---
+ .../dashboard/clipboard/ClipboardTab.qml      | 94 ++++++++-----------
+ 1 file changed, 38 insertions(+), 56 deletions(-)
+
+diff --git a/modules/widgets/dashboard/clipboard/ClipboardTab.qml b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+index d33f374..41c885f 100644
+--- a/modules/widgets/dashboard/clipboard/ClipboardTab.qml
++++ b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+@@ -66,18 +66,35 @@ Item {
+     property int expandedItemIndex: -1
+     property int selectedOptionIndex: 0
+     property bool keyboardNavigation: false
++    // Set while hover changes the selection, so the list doesn't scroll under the cursor
++    property bool hoverSelecting: false
+ 
+     onExpandedItemIndexChanged:
+     // Close expanded options when selection changes to a different item is handled in onSelectedIndexChanged
+     {}
+ 
+-    // Refresh clipboard list when tab becomes visible
++    // Select the newest item on the next list refresh instead of restoring the old selection
++    property bool selectTopOnRefresh: false
++
++    // Refresh clipboard list when tab becomes visible, starting at the newest item
+     onVisibleChanged: {
+         if (visible) {
++            selectTopOnRefresh = true;
++            expandedItemIndex = -1;
++            selectTop();
+             ClipboardService.list();
+         }
+     }
+ 
++    function selectTop() {
++        if (allItems.length === 0)
++            return;
++        hasNavigatedFromSearch = true;
++        selectedIndex = 0;
++        resultsList.currentIndex = 0;
++        resultsList.positionViewAtBeginning();
++    }
++
+     function adjustScrollForExpandedItem(index) {
+         if (index < 0 || index >= itemsModel.count)
+             return;
+@@ -94,7 +111,7 @@ Item {
+         if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+             optionsCount++;
+         }
+-        var listHeight = 36 * Math.min(3, optionsCount);
++        var listHeight = 36 * optionsCount;
+         var expandedHeight = 48 + 4 + listHeight + 8;
+ 
+         // Calculate max valid scroll position
+@@ -495,6 +512,13 @@ Item {
+         // Only trigger later scroll animation enable if strictly needed,
+         // but since we aren't clearing, we might not need to toggle it at all.
+ 
++        if (selectTopOnRefresh) {
++            selectTopOnRefresh = false;
++            pendingItemIdToSelect = "";
++            selectTop();
++            return;
++        }
++
+         // If we have a pending item to select (after pin/alias operations), find it
+         if (pendingItemIdToSelect !== "") {
+             for (var i = 0; i < newItems.length; i++) {
+@@ -1002,8 +1026,10 @@ Item {
+                             root.selectedIndex = currentIndex;
+                         }
+ 
+-                        // Manual smooth auto-scroll (simplified for variable height items)
+-                        if (currentIndex >= 0) {
++                        // Manual smooth auto-scroll (simplified for variable height items).
++                        // Keyboard only: scrolling on hover moves a new item under the
++                        // cursor, which selects it and scrolls again.
++                        if (currentIndex >= 0 && !root.hoverSelecting) {
+                             var itemY = 0;
+                             for (var i = 0; i < currentIndex && i < itemsModel.count; i++) {
+                                 var itemData = itemsModel.get(i).itemData;
+@@ -1013,7 +1039,7 @@ Item {
+                                     if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+                                         optionsCount++;
+                                     }
+-                                    var listHeight = 36 * Math.min(3, optionsCount);
++                                    var listHeight = 36 * optionsCount;
+                                     itemHeight = 48 + 4 + listHeight + 8;
+                                 }
+                                 itemY += itemHeight;
+@@ -1026,7 +1052,7 @@ Item {
+                                 if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+                                     optionsCount++;
+                                 }
+-                                var listHeight = 36 * Math.min(3, optionsCount);
++                                var listHeight = 36 * optionsCount;
+                                 currentItemHeight = 48 + 4 + listHeight + 8;
+                             }
+ 
+@@ -1116,7 +1142,7 @@ Item {
+                                 if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+                                     optionsCount++; // Add Open
+                                 }
+-                                var listHeight = 36 * Math.min(3, optionsCount);
++                                var listHeight = 36 * optionsCount;
+                                 return baseHeight + 4 + listHeight + 8; // base + spacing + list + bottom margin
+                             }
+                             return baseHeight;
+@@ -1190,8 +1216,10 @@ Item {
+                             onEntered: {
+                                 // Don't change selection if there's an expanded menu open or dragging or scrolling
+                                 if (!root.deleteMode && root.expandedItemIndex === -1 && !isDraggingForReorder && !resultsList.isScrolling) {
++                                    root.hoverSelecting = true;
+                                     root.selectedIndex = index;
+                                     resultsList.currentIndex = index;
++                                    root.hoverSelecting = false;
+                                 }
+                             }
+ 
+@@ -1677,10 +1705,10 @@ Item {
+                                 Layout.fillWidth: true
+                                 Layout.preferredHeight: {
+                                     var count = 4; // Copy, Pin, Alias, Delete
+-                                    if (modelData.isFile || ClipboardUtils.isUrl(modelData.preview)) {
++                                    if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+                                         count++; // Add Open
+                                     }
+-                                    return 36 * Math.min(3, count);
++                                    return 36 * count;
+                                 }
+                                 color: Colors.background
+                                 radius: Styling.radius(0)
+@@ -1912,52 +1940,6 @@ Item {
+                                     }
+                                 }
+                             }
+-
+-                            ScrollBar {
+-                                Layout.preferredWidth: 8
+-                                Layout.preferredHeight: {
+-                                    var count = 4;
+-                                    if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+-                                        count++;
+-                                    }
+-                                    var listHeight = 36 * Math.min(3, count);
+-                                    return Math.max(0, listHeight - 32);
+-                                }
+-                                Layout.alignment: Qt.AlignVCenter
+-                                orientation: Qt.Vertical
+-                                visible: {
+-                                    var count = 4;
+-                                    if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+-                                        count++;
+-                                    }
+-                                    return count > 3;
+-                                }
+-
+-                                position: optionsListView.contentY / optionsListView.contentHeight
+-                                size: optionsListView.height / optionsListView.contentHeight
+-
+-                                background: Rectangle {
+-                                    color: Colors.background
+-                                    radius: Styling.radius(0)
+-                                }
+-
+-                                contentItem: Rectangle {
+-                                    color: Styling.srItem("overprimary")
+-                                    radius: Styling.radius(0)
+-                                }
+-
+-                                property bool scrollBarPressed: false
+-
+-                                onPressedChanged: {
+-                                    scrollBarPressed = pressed;
+-                                }
+-
+-                                onPositionChanged: {
+-                                    if (scrollBarPressed && optionsListView.contentHeight > optionsListView.height) {
+-                                        optionsListView.contentY = position * optionsListView.contentHeight;
+-                                    }
+-                                }
+-                            }
+                         }
+ 
+                         RowLayout {
+@@ -2303,7 +2285,7 @@ Item {
+                             if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+                                 optionsCount++;
+                             }
+-                            var listHeight = 36 * Math.min(3, optionsCount);
++                            var listHeight = 36 * optionsCount;
+                             itemHeight = 48 + 4 + listHeight + 8;
+                         }
+ 
+-- 
+2.47.3
+
