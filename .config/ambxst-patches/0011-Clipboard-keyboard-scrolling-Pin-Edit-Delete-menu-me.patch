@@ -1,0 +1,283 @@
+From 2492f1153ee7b1cd7364ffc6ec532dc88e59b1ee Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 01:38:34 +0700
+Subject: [PATCH 11/11] Clipboard: keyboard scrolling, Pin/Edit/Delete menu,
+ menu below the fold
+
+Arrow keys no longer lose the selection to the mouse. Keyboard scrolling
+slid rows under a resting cursor and hover selected them; hover now
+waits for the pointer to move again after an arrow press.
+
+Pressing Up on the newest item keeps it selected instead of clearing
+the selection and showing the empty preview.
+
+The right-click (and Shift+Enter) menu is now just Pin, Edit and
+Delete. Edit is the former Alias option; clicking or Enter still copies.
+
+Scroll and hit-testing use the rows' real positions. Rows start at
+originY, which moves when new items are inserted on top, so the menu on
+a lower item was clamped out of view and clicks on its options counted
+as clicks outside it.
+---
+ .../dashboard/clipboard/ClipboardTab.qml      | 127 +++++-------------
+ 1 file changed, 36 insertions(+), 91 deletions(-)
+
+diff --git a/modules/widgets/dashboard/clipboard/ClipboardTab.qml b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+index 1e7aa9d..6153af4 100644
+--- a/modules/widgets/dashboard/clipboard/ClipboardTab.qml
++++ b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+@@ -126,6 +126,13 @@ Item {
+         return hoverArmed;
+     }
+ 
++    // Keyboard navigation scrolls rows under a still cursor; make the pointer
++    // move again before hover can take the selection back
++    function disarmHover() {
++        hoverArmed = false;
++        hoverOriginSet = false;
++    }
++
+     function hoverSelect(index) {
+         if (!hoverArmed || deleteMode || expandedItemIndex !== -1 || resultsList.isScrolling || selectedIndex === index)
+             return;
+@@ -139,23 +146,21 @@ Item {
+         if (index < 0 || index >= itemsModel.count)
+             return;
+ 
+-        // Calculate Y position of the item
+-        var itemY = 0;
+-        for (var i = 0; i < index; i++) {
+-            itemY += 48; // All items before are collapsed (base height)
+-        }
++        // Use the delegate's real position: rows start at originY, which shifts
++        // when new items are inserted on top. All items before are collapsed.
++        var item = resultsList.itemAtIndex(index);
++        var itemY = item ? item.y : resultsList.originY + index * 48;
+ 
+         // Calculate expanded item height
+         var itemData = itemsModel.get(index).itemData;
+-        var optionsCount = 4;
+-        if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+-            optionsCount++;
+-        }
++        var optionsCount = 3; // Pin, Edit, Delete
+         var listHeight = 36 * optionsCount;
+         var expandedHeight = 48 + 4 + listHeight + 8;
+ 
+-        // Calculate max valid scroll position
+-        var maxContentY = Math.max(0, resultsList.contentHeight - resultsList.height);
++        // Calculate max valid scroll position from the final layout, since the
++        // expanding row's height (and contentHeight) is still animating
++        var contentEnd = itemY + expandedHeight + (itemsModel.count - index - 1) * 48;
++        var maxContentY = Math.max(resultsList.originY, contentEnd - resultsList.height);
+ 
+         // Current viewport bounds
+         var viewportTop = resultsList.contentY;
+@@ -610,6 +615,7 @@ Item {
+     }
+ 
+     function onDownPressed() {
++        root.disarmHover();
+         if (!root.hasNavigatedFromSearch) {
+             root.hasNavigatedFromSearch = true;
+             if (resultsList.count > 0) {
+@@ -629,13 +635,13 @@ Item {
+     }
+ 
+     function onUpPressed() {
++        root.disarmHover();
+         if (root.selectedIndex > 0) {
+             root.selectedIndex--;
+             resultsList.currentIndex = root.selectedIndex;
+         } else if (root.selectedIndex === 0) {
+-            root.selectedIndex = -1;
+-            root.hasNavigatedFromSearch = false;
+-            resultsList.currentIndex = -1;
++            // Stay on the newest item instead of dropping the selection
++            resultsList.positionViewAtBeginning();
+         }
+     }
+ 
+@@ -779,18 +785,6 @@ Item {
+                             if (item) {
+                                 // Build options array dynamically
+                                 let options = [function () {
+-                                        root.copyToClipboard(item.id);
+-                                        Visibilities.setActiveModule("");
+-                                    }];
+-
+-                                // Add Open if applicable
+-                                if (item.isFile || item.isImage || ClipboardUtils.isUrl(item.preview)) {
+-                                    options.push(function () {
+-                                        root.openItem(item.id);
+-                                    });
+-                                }
+-
+-                                options.push(function () {
+                                     root.pendingItemIdToSelect = item.id;
+                                     ClipboardService.togglePin(item.id);
+                                     root.expandedItemIndex = -1;
+@@ -800,7 +794,7 @@ Item {
+                                 }, function () {
+                                     root.enterDeleteMode(item.id);
+                                     root.expandedItemIndex = -1;
+-                                });
++                                }];
+ 
+                                 if (root.selectedOptionIndex >= 0 && root.selectedOptionIndex < options.length) {
+                                     options[root.selectedOptionIndex]();
+@@ -888,10 +882,7 @@ Item {
+                             // Navigate options when menu is expanded - get dynamic count
+                             let item = root.allItems[root.expandedItemIndex];
+                             if (item) {
+-                                let maxOptions = 4; // Base: Copy, Pin, Alias, Delete
+-                                if (item.isFile || item.isImage || ClipboardUtils.isUrl(item.preview)) {
+-                                    maxOptions++; // Add Open
+-                                }
++                                let maxOptions = 3; // Pin, Edit, Delete
+                                 if (root.selectedOptionIndex < maxOptions - 1) {
+                                     root.selectedOptionIndex++;
+                                     root.keyboardNavigation = true;
+@@ -1070,15 +1061,13 @@ Item {
+                         // Keyboard only: scrolling on hover moves a new item under the
+                         // cursor, which selects it and scrolls again.
+                         if (currentIndex >= 0 && !root.hoverSelecting) {
+-                            var itemY = 0;
++                            // Rows start at originY, which shifts when new items are inserted on top
++                            var itemY = resultsList.originY;
+                             for (var i = 0; i < currentIndex && i < itemsModel.count; i++) {
+                                 var itemData = itemsModel.get(i).itemData;
+                                 var itemHeight = 48;
+                                 if (i === root.expandedItemIndex && !root.deleteMode && !root.aliasMode) {
+-                                    var optionsCount = 4;
+-                                    if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+-                                        optionsCount++;
+-                                    }
++                                    var optionsCount = 3; // Pin, Edit, Delete
+                                     var listHeight = 36 * optionsCount;
+                                     itemHeight = 48 + 4 + listHeight + 8;
+                                 }
+@@ -1088,10 +1077,7 @@ Item {
+                             var currentItemHeight = 48;
+                             if (currentIndex === root.expandedItemIndex && !root.deleteMode && !root.aliasMode && currentIndex < itemsModel.count) {
+                                 var itemData = itemsModel.get(currentIndex).itemData;
+-                                var optionsCount = 4;
+-                                if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+-                                    optionsCount++;
+-                                }
++                                var optionsCount = 3; // Pin, Edit, Delete
+                                 var listHeight = 36 * optionsCount;
+                                 currentItemHeight = 48 + 4 + listHeight + 8;
+                             }
+@@ -1178,10 +1164,7 @@ Item {
+                         height: {
+                             let baseHeight = 48;
+                             if (index === root.expandedItemIndex && !isInDeleteMode && !isInAliasMode) {
+-                                var optionsCount = 4; // Base: Copy, Pin, Alias, Delete
+-                                if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+-                                    optionsCount++; // Add Open
+-                                }
++                                var optionsCount = 3; // Pin, Edit, Delete
+                                 var listHeight = 36 * optionsCount;
+                                 return baseHeight + 4 + listHeight + 8; // base + spacing + list + bottom margin
+                             }
+@@ -1743,10 +1726,7 @@ Item {
+                             ClippingRectangle {
+                                 Layout.fillWidth: true
+                                 Layout.preferredHeight: {
+-                                    var count = 4; // Copy, Pin, Alias, Delete
+-                                    if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+-                                        count++; // Add Open
+-                                    }
++                                    var count = 3; // Pin, Edit, Delete
+                                     return 36 * count;
+                                 }
+                                 color: Colors.background
+@@ -1771,31 +1751,7 @@ Item {
+                                     property bool isScrolling: dragging || flicking
+ 
+                                     model: {
+-                                        var options = [
+-                                            {
+-                                                text: I18n.t("common.copy"),
+-                                                icon: Icons.copy,
+-                                                highlightColor: Styling.srItem("overprimary"),
+-                                                textColor: Styling.srItem("primary"),
+-                                                action: function () {
+-                                                    root.copyToClipboard(modelData.id);
+-                                                    Visibilities.setActiveModule("");
+-                                                }
+-                                            }
+-                                        ];
+-
+-                                        // Add Open option for files, images, and URLs
+-                                        if (modelData.isFile || modelData.isImage || ClipboardUtils.isUrl(modelData.preview)) {
+-                                            options.push({
+-                                                text: I18n.t("common.open"),
+-                                                icon: Icons.popOpen,
+-                                                highlightColor: Styling.srItem("overprimary"),
+-                                                textColor: Styling.srItem("primary"),
+-                                                action: function () {
+-                                                    root.openItem(modelData.id);
+-                                                }
+-                                            });
+-                                        }
++                                        var options = [];
+ 
+                                         options.push({
+                                             text: modelData.pinned ? I18n.t("clipboard.unpin") : I18n.t("clipboard.pin"),
+@@ -1808,7 +1764,7 @@ Item {
+                                                 root.expandedItemIndex = -1;
+                                             }
+                                         }, {
+-                                            text: I18n.t("clipboard.alias"),
++                                            text: I18n.t("common.edit"),
+                                             icon: Icons.edit,
+                                             highlightColor: Colors.secondary,
+                                             textColor: Styling.srItem("secondary"),
+@@ -2300,36 +2256,25 @@ Item {
+ 
+                     function isClickInsideActiveItem(mouseY) {
+                         var activeIndex = -1;
+-                        var isExpanded = false;
+ 
+                         if (root.deleteMode || root.aliasMode) {
+                             activeIndex = root.selectedIndex;
+                             // In delete/alias mode, height is always base height (48)
+                         } else if (root.expandedItemIndex >= 0) {
+                             activeIndex = root.expandedItemIndex;
+-                            isExpanded = true;
+                         }
+ 
+                         if (activeIndex < 0)
+                             return false;
+ 
+-                        // Calculate Y position of the item
+-                        var itemY = activeIndex * 48;
+-
+-                        // Calculate item height
+-                        var itemHeight = 48;
+-                        if (isExpanded) {
+-                            var itemData = itemsModel.get(activeIndex).itemData;
+-                            var optionsCount = 4;
+-                            if (itemData.isFile || itemData.isImage || ClipboardUtils.isUrl(itemData.preview)) {
+-                                optionsCount++;
+-                            }
+-                            var listHeight = 36 * optionsCount;
+-                            itemHeight = 48 + 4 + listHeight + 8;
+-                        }
++                        // Hit-test against the delegate's real geometry: rows start at
++                        // originY, not 0, once new items have been inserted on top
++                        var item = resultsList.itemAtIndex(activeIndex);
++                        if (!item)
++                            return false;
+ 
+                         var clickY = mouseY + resultsList.contentY;
+-                        return clickY >= itemY && clickY < itemY + itemHeight;
++                        return clickY >= item.y && clickY < item.y + item.height;
+                     }
+ 
+                     onClicked: mouse => {
+-- 
+2.47.3
+

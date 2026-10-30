@@ -1,7 +1,7 @@
 From 2f3c6e879cb43b7642bcf3d72ca0aac101f7c978 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 16:54:15 +0700
-Subject: [PATCH 9/9] Clipboard: stop hover auto-scroll, open at newest item,
+Subject: [PATCH 09/11] Clipboard: stop hover auto-scroll, open at newest item,
  show all options
 
 Hovering an item no longer scrolls the list. Scrolling on hover slid a

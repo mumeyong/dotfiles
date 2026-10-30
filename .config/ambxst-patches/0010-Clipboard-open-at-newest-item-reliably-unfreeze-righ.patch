@@ -1,0 +1,150 @@
+From 0a09efbf0f3dc3e87838b58ea71225eb087a9656 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 15:39:04 +0700
+Subject: [PATCH 10/11] Clipboard: open at newest item reliably, unfreeze
+ right-click menu
+
+Opening the clipboard now jumps to the newest item without animating.
+A scroll animation left running from the previous session kept writing
+contentY after positionViewAtBeginning() and slid the list back down,
+and rows passing under a resting cursor stole the selection on hover.
+
+Hover only changes the selection once the pointer has actually moved
+since the panel opened, so a cursor parked over the notch no longer
+picks an old item.
+
+While the right-click options menu is open, the mouse wheel now closes
+the menu and scrolls the list instead of doing nothing, and
+right-clicking another row moves the menu there in one click instead of
+only dismissing it.
+---
+ .../dashboard/clipboard/ClipboardTab.qml      | 70 +++++++++++++++++--
+ 1 file changed, 63 insertions(+), 7 deletions(-)
+
+diff --git a/modules/widgets/dashboard/clipboard/ClipboardTab.qml b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+index 41c885f..1e7aa9d 100644
+--- a/modules/widgets/dashboard/clipboard/ClipboardTab.qml
++++ b/modules/widgets/dashboard/clipboard/ClipboardTab.qml
+@@ -76,11 +76,19 @@ Item {
+     // Select the newest item on the next list refresh instead of restoring the old selection
+     property bool selectTopOnRefresh: false
+ 
++    // Hover only selects after the pointer really moves, so a cursor resting
++    // where the panel opens doesn't steal the selection from the newest item
++    property bool hoverArmed: false
++    property bool hoverOriginSet: false
++    property point hoverOrigin: Qt.point(0, 0)
++
+     // Refresh clipboard list when tab becomes visible, starting at the newest item
+     onVisibleChanged: {
+         if (visible) {
+             selectTopOnRefresh = true;
+             expandedItemIndex = -1;
++            hoverArmed = false;
++            hoverOriginSet = false;
+             selectTop();
+             ClipboardService.list();
+         }
+@@ -90,9 +98,41 @@ Item {
+         if (allItems.length === 0)
+             return;
+         hasNavigatedFromSearch = true;
++        // Jump without animating: an animated scroll left over from the last
++        // session would keep writing contentY and drag the list back down
++        resultsList.enableScrollAnimation = false;
++        hoverSelecting = true;
+         selectedIndex = 0;
+         resultsList.currentIndex = 0;
++        hoverSelecting = false;
++        resultsList.cancelFlick();
++        resultsList.contentY = resultsList.originY;
+         resultsList.positionViewAtBeginning();
++        resultsList.enableScrollAnimation = true;
++    }
++
++    // Arm hover once the pointer has moved a few pixels in scene coordinates.
++    // Items sliding under a still cursor don't change its scene position.
++    function trackHover(scenePos) {
++        if (hoverArmed)
++            return true;
++        if (!hoverOriginSet) {
++            hoverOrigin = scenePos;
++            hoverOriginSet = true;
++            return false;
++        }
++        if (Math.abs(scenePos.x - hoverOrigin.x) + Math.abs(scenePos.y - hoverOrigin.y) > 4)
++            hoverArmed = true;
++        return hoverArmed;
++    }
++
++    function hoverSelect(index) {
++        if (!hoverArmed || deleteMode || expandedItemIndex !== -1 || resultsList.isScrolling || selectedIndex === index)
++            return;
++        hoverSelecting = true;
++        selectedIndex = index;
++        resultsList.currentIndex = index;
++        hoverSelecting = false;
+     }
+ 
+     function adjustScrollForExpandedItem(index) {
+@@ -1215,12 +1255,8 @@ Item {
+ 
+                             onEntered: {
+                                 // Don't change selection if there's an expanded menu open or dragging or scrolling
+-                                if (!root.deleteMode && root.expandedItemIndex === -1 && !isDraggingForReorder && !resultsList.isScrolling) {
+-                                    root.hoverSelecting = true;
+-                                    root.selectedIndex = index;
+-                                    resultsList.currentIndex = index;
+-                                    root.hoverSelecting = false;
+-                                }
++                                if (!isDraggingForReorder)
++                                    root.hoverSelect(index);
+                             }
+ 
+                             onClicked: mouse => {
+@@ -1271,6 +1307,9 @@ Item {
+                             }
+ 
+                             onPositionChanged: mouse => {
++                                if (!pressed && root.trackHover(mapToItem(null, mouse.x, mouse.y)) && !isDraggingForReorder)
++                                    root.hoverSelect(index);
++
+                                 if (pressed && mouse.button !== Qt.RightButton) {
+                                     let deltaX = mouse.x - startX;
+                                     let deltaY = mouse.y - startY;
+@@ -2301,7 +2340,13 @@ Item {
+                             mouse.accepted = true;
+                         } else if (root.expandedItemIndex >= 0) {
+                             if (!isClickInsideActiveItem(mouse.y)) {
+-                                root.expandedItemIndex = -1;
++                                // Right-click on another row moves the menu there in one click
++                                var clickedIndex = mouse.button === Qt.RightButton ? resultsList.indexAt(mouse.x, mouse.y + resultsList.contentY) : -1;
++                                root.expandedItemIndex = clickedIndex;
++                                if (clickedIndex >= 0) {
++                                    root.selectedIndex = clickedIndex;
++                                    resultsList.currentIndex = clickedIndex;
++                                }
+                                 root.selectedOptionIndex = 0;
+                                 root.keyboardNavigation = false;
+                                 mouse.accepted = true;
+@@ -2309,6 +2354,17 @@ Item {
+                         }
+                     }
+ 
++                    // Scrolling closes the options menu and scrolls the list,
++                    // instead of the wheel doing nothing while the menu is open
++                    onWheel: wheel => {
++                        if (root.expandedItemIndex >= 0) {
++                            root.expandedItemIndex = -1;
++                            root.selectedOptionIndex = 0;
++                            root.keyboardNavigation = false;
++                        }
++                        wheel.accepted = false;
++                    }
++
+                     onPressed: mouse => {
+                         if (isClickInsideActiveItem(mouse.y)) {
+                             mouse.accepted = false;
+-- 
+2.47.3
+
