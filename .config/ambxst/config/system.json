@@ -13,8 +13,8 @@
     "listeners": [
       {
         "timeout": 150,
-        "onTimeout": "axctl brightness save && $HOME/.config/hypr/scripts/idle-when bat axctl brightness set 0.1",
-        "onResume": "axctl brightness restore"
+        "onTimeout": "ambxst brightness -s && $HOME/.config/hypr/scripts/idle-when bat ambxst brightness 10",
+        "onResume": "ambxst brightness -r"
       },
       {
         "timeout": 300,
@@ -27,7 +27,8 @@
       },
       {
         "timeout": 1800,
-        "onTimeout": "axctl brightness set 0.1"
+        "onTimeout": "ambxst brightness 10",
+        "onResume": "ambxst brightness -r"
       },
       {
         "timeout": 2100,
