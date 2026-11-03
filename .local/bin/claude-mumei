@@ -1,0 +1,5 @@
+#!/bin/sh
+# Claude Code with the personal account (config in ~/.claude-personal).
+# Plain `claude` keeps using the work account in ~/.claude.
+export CLAUDE_CONFIG_DIR="$HOME/.claude-personal"
+exec claude "$@"
