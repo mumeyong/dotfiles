@@ -1,0 +1,96 @@
+From 910208cffedaffb67e2f81ec61507051083992d2 Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 17:03:28 +0700
+Subject: [PATCH 13/13] CLI: scrub Quickshell crash-relaunch env before
+ spawning qs
+
+After a crash, Quickshell relaunches the shell in place with
+__QUICKSHELL_CRASH_INFO_FD set and never clears it, so commands the shell
+runs (e.g. the onResume 'ambxst brightness -r') inherit it. The child
+'qs ipc ... brightness pull' then takes the crash-relaunch path and boots a
+second shell, doubling the bar's exclusive zone and pushing windows down.
+---
+ backend/cmd/ambxst/main.go       |  1 +
+ backend/cmd/ambxst/qsenv.go      | 27 +++++++++++++++++++++++++++
+ backend/cmd/ambxst/qsenv_test.go | 23 +++++++++++++++++++++++
+ 3 files changed, 51 insertions(+)
+ create mode 100644 backend/cmd/ambxst/qsenv.go
+ create mode 100644 backend/cmd/ambxst/qsenv_test.go
+
+diff --git a/backend/cmd/ambxst/main.go b/backend/cmd/ambxst/main.go
+index 3ac3990..f96d956 100644
+--- a/backend/cmd/ambxst/main.go
++++ b/backend/cmd/ambxst/main.go
+@@ -20,6 +20,7 @@ import (
+ var version = "dev"
+ 
+ func main() {
++	scrubQuickshellCrashEnv()
+ 	args := os.Args[1:]
+ 
+ 	if len(args) >= 1 {
+diff --git a/backend/cmd/ambxst/qsenv.go b/backend/cmd/ambxst/qsenv.go
+new file mode 100644
+index 0000000..9f813f8
+--- /dev/null
++++ b/backend/cmd/ambxst/qsenv.go
+@@ -0,0 +1,27 @@
++package main
++
++import (
++	"os"
++	"strings"
++)
++
++// quickshellCrashEnvPrefix marks the variables Quickshell's crash handler
++// sets when it relaunches a crashed shell in place (__QUICKSHELL_CRASH_INFO_FD
++// and friends). Quickshell never clears them afterwards, so every process the
++// relaunched shell spawns inherits them — including `ambxst brightness -r`
++// from the onResume hook. Any `qs` started with __QUICKSHELL_CRASH_INFO_FD set
++// takes the crash-relaunch path and boots a second full shell instead of
++// running its subcommand (e.g. `qs ipc ... brightness pull`), which doubles
++// the bar and its exclusive zone.
++const quickshellCrashEnvPrefix = "__QUICKSHELL_CRASH_"
++
++// scrubQuickshellCrashEnv removes the inherited crash-relaunch variables so
++// no `qs` child of this process mistakes itself for a crash relaunch.
++func scrubQuickshellCrashEnv() {
++	for _, kv := range os.Environ() {
++		name, _, _ := strings.Cut(kv, "=")
++		if strings.HasPrefix(name, quickshellCrashEnvPrefix) {
++			_ = os.Unsetenv(name)
++		}
++	}
++}
+diff --git a/backend/cmd/ambxst/qsenv_test.go b/backend/cmd/ambxst/qsenv_test.go
+new file mode 100644
+index 0000000..cb4a573
+--- /dev/null
++++ b/backend/cmd/ambxst/qsenv_test.go
+@@ -0,0 +1,23 @@
++package main
++
++import (
++	"os"
++	"testing"
++)
++
++func TestScrubQuickshellCrashEnv(t *testing.T) {
++	t.Setenv("__QUICKSHELL_CRASH_INFO_FD", "5")
++	t.Setenv("__QUICKSHELL_CRASH_DUMP_PID", "1234")
++	t.Setenv("QS_ICON_THEME", "keep-me")
++
++	scrubQuickshellCrashEnv()
++
++	for _, name := range []string{"__QUICKSHELL_CRASH_INFO_FD", "__QUICKSHELL_CRASH_DUMP_PID"} {
++		if _, ok := os.LookupEnv(name); ok {
++			t.Errorf("%s still set after scrub", name)
++		}
++	}
++	if got := os.Getenv("QS_ICON_THEME"); got != "keep-me" {
++		t.Errorf("QS_ICON_THEME = %q, want it untouched", got)
++	}
++}
+-- 
+2.47.3
+

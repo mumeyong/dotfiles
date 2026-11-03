@@ -1,7 +1,7 @@
 From baac87be849a8b8553233f1f3edffe8b06d04d14 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Tue, 3 Nov 2026 16:58:25 +0700
-Subject: [PATCH 12/12] Mpris: don't reselect the player being removed
+Subject: [PATCH 12/13] Mpris: don't reselect the player being removed
 
 When the tracked player disappears, the fallback read playbackState.isPlaying
 (which throws) and could pick the dying player from the stale filteredPlayers
