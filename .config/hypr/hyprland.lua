@@ -32,7 +32,12 @@ hl.env("XDG_SESSION_TYPE", "wayland")
 -- Monitors & workspaces
 ----------------------------------------------------------------------
 hl.monitor({ output = "eDP-1", mode = "1920x1200@60", position = "1920x0", scale = "1" })
-hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@74.97", position = "0x0", scale = "1" })
+-- Any HDMI monitor/projector: use its own preferred mode so it never gets
+-- a mode it can't display ("resolution not supported"). Placed at 0x0 so
+-- its right edge touches the laptop screen at x=1920.
+hl.monitor({ output = "HDMI-A-1", mode = "preferred", position = "0x0", scale = "1" })
+-- Home LG monitor: 75Hz. Must come AFTER the generic rule (later rule wins).
+hl.monitor({ output = "desc:LG Electronics LG FHD 203NTZN6Y421", mode = "1920x1080@74.97", position = "0x0", scale = "1" })
 
 -- Fixed workspaces: 1..per_monitor on HDMI, the next per_monitor on the
 -- laptop screen. Change per_monitor to resize; keybinds follow.
