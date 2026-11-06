@@ -1,7 +1,7 @@
 From 0a09efbf0f3dc3e87838b58ea71225eb087a9656 Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Fri, 30 Oct 2026 15:39:04 +0700
-Subject: [PATCH 10/13] Clipboard: open at newest item reliably, unfreeze
+Subject: [PATCH 10/14] Clipboard: open at newest item reliably, unfreeze
  right-click menu
 
 Opening the clipboard now jumps to the newest item without animating.

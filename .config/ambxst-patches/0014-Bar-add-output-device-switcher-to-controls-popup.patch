@@ -1,0 +1,128 @@
+From b2285fe8558351571eabd1b341275e79beab450d Mon Sep 17 00:00:00 2001
+From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 09:10:14 +0700
+Subject: [PATCH 14/14] Bar: add output device switcher to controls popup
+
+List audio output devices under the volume/mic/brightness sliders so the
+default sink can be switched from the bar. Uses node nick for short names
+and hides HDMI ports with no display attached.
+---
+ modules/bar/ControlsButton.qml | 87 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 84 insertions(+), 3 deletions(-)
+
+diff --git a/modules/bar/ControlsButton.qml b/modules/bar/ControlsButton.qml
+index 68577a9..a2f6156 100644
+--- a/modules/bar/ControlsButton.qml
++++ b/modules/bar/ControlsButton.qml
+@@ -23,6 +23,14 @@ Item {
+     // Popup visibility state (tracks intent, not animation)
+     property bool popupOpen: controlsPopup.isOpen
+ 
++    // Output devices for the quick switcher. HDMI ports with nothing attached
++    // keep their generic "HDMI N" nick (a connected display renames it via ELD),
++    // so hide those to avoid dead entries.
++    readonly property var outputDevices: Audio.outputDevices.filter(node => !(/HDMI/.test(node?.name ?? "") && /^HDMI \d+$/.test(node?.nickname ?? "")))
++    readonly property int deviceRowHeight: 32
++    readonly property int deviceRowSpacing: 4
++    readonly property int deviceListHeight: outputDevices.length > 0 ? outputDevices.length * deviceRowHeight + (outputDevices.length - 1) * deviceRowSpacing : 0
++
+     Layout.preferredWidth: 36
+     Layout.preferredHeight: 36
+     Layout.fillWidth: vertical
+@@ -94,10 +102,10 @@ Item {
+         bar: root.bar
+         popupPadding: 16
+ 
+-        contentWidth: 220
++        contentWidth: 240
+         // Fixed height calculation to prevent expansion animation on first open
+-        // 3 rows * 36px + 2 gaps * 12px = 132px
+-        contentHeight: 132 + popupPadding * 2
++        // 3 rows * 36px + 2 gaps * 12px = 132px, plus separator (2px + 2 gaps) and output list
++        contentHeight: 132 + (root.deviceListHeight > 0 ? 2 + 12 * 2 + root.deviceListHeight : 0) + popupPadding * 2
+ 
+         ColumnLayout {
+             id: slidersColumn
+@@ -237,6 +245,79 @@ Item {
+                     }
+                 }
+             }
++
++            Separator {
++                visible: root.outputDevices.length > 0
++                Layout.fillWidth: true
++                Layout.preferredHeight: 2
++            }
++
++            // Output device switcher
++            ColumnLayout {
++                visible: root.outputDevices.length > 0
++                Layout.fillWidth: true
++                spacing: root.deviceRowSpacing
++
++                Repeater {
++                    model: root.outputDevices
++
++                    delegate: Item {
++                        id: deviceRow
++                        required property var modelData
++                        readonly property bool isSelected: Audio.sink === modelData
++                        readonly property bool isBluetooth: (modelData?.name ?? "").startsWith("bluez")
++
++                        Layout.fillWidth: true
++                        Layout.preferredHeight: root.deviceRowHeight
++
++                        StyledRect {
++                            anchors.fill: parent
++                            variant: deviceRow.isSelected ? "primary" : (deviceMouse.containsMouse ? "focus" : "common")
++                            radius: deviceRow.isSelected ? Styling.radius(-4) : Styling.radius(4)
++                        }
++
++                        MouseArea {
++                            id: deviceMouse
++                            anchors.fill: parent
++                            hoverEnabled: true
++                            cursorShape: Qt.PointingHandCursor
++                            onClicked: Audio.setDefaultSink(deviceRow.modelData)
++                        }
++
++                        RowLayout {
++                            anchors.fill: parent
++                            anchors.leftMargin: 10
++                            anchors.rightMargin: 10
++                            spacing: 10
++
++                            Text {
++                                text: deviceRow.isBluetooth ? Icons.headphones : Icons.speakerHigh
++                                font.family: Icons.font
++                                font.pixelSize: 16
++                                color: deviceRow.isSelected ? Styling.srItem("primary") : Colors.overBackground
++                            }
++
++                            Text {
++                                Layout.fillWidth: true
++                                text: deviceRow.modelData?.nickname || Audio.friendlyDeviceName(deviceRow.modelData)
++                                font.family: Config.theme.font
++                                font.pixelSize: Config.theme.fontSize
++                                font.weight: deviceRow.isSelected ? Font.Bold : Font.Normal
++                                color: deviceRow.isSelected ? Styling.srItem("primary") : Colors.overBackground
++                                elide: Text.ElideRight
++                            }
++
++                            Text {
++                                visible: deviceRow.isSelected
++                                text: Icons.accept
++                                font.family: Icons.font
++                                font.pixelSize: 14
++                                color: Styling.srItem("primary")
++                            }
++                        }
++                    }
++                }
++            }
+         }
+     }
+ 
+-- 
+2.47.3
+

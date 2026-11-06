@@ -1,7 +1,7 @@
 From 2492f1153ee7b1cd7364ffc6ec532dc88e59b1ee Mon Sep 17 00:00:00 2001
 From: "mumeyong.dev" <64839630+mumeyong@users.noreply.github.com>
 Date: Sat, 31 Oct 2026 01:38:34 +0700
-Subject: [PATCH 11/13] Clipboard: keyboard scrolling, Pin/Edit/Delete menu,
+Subject: [PATCH 11/14] Clipboard: keyboard scrolling, Pin/Edit/Delete menu,
  menu below the fold
 
 Arrow keys no longer lose the selection to the mouse. Keyboard scrolling
